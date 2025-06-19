@@ -207,6 +207,11 @@ public partial class ApkBuilder
             string fileName = Path.GetFileName(file);
             string extension = Path.GetExtension(file);
 
+            if (fileName.EndsWith(".runtimeconfig.json", StringComparison.OrdinalIgnoreCase))
+            {
+                // runtimeconfig.json is needed for globalization
+                return true;
+            }
             if (extensionsToIgnore.Contains(extension))
             {
                 // ignore native files, those go to lib/%abi%
