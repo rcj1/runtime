@@ -14,7 +14,7 @@ while [[ -h "$source" ]]; do
 done
 scriptroot="$( cd -P "$( dirname "$source" )" && pwd )"
 
-export MSBUILSUSESERVER=1
+export MSBUILDUSESERVER=1
 
 usage()
 {
