@@ -175,6 +175,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
+
 namespace System.Diagnostics.Tracing
 {
     [Conditional("NEEDED_FOR_SOURCE_GENERATOR_ONLY")]
@@ -227,7 +228,7 @@ namespace System.Diagnostics.Tracing
         private string m_name = null!;                  // My friendly name (privided in ctor)
         internal int m_id;                              // A small integer that is unique to this instance.
         private Guid m_guid;                            // GUID representing the ETW eventSource to the OS.
-        internal volatile Dictionary<int, EventMetadata>? m_eventData; // None per-event data
+        internal volatile EventMetadata[]? m_eventData; // None per-event data
         private volatile byte[]? m_rawManifest;          // Bytes to send out representing the event schema
 
         private EventHandler<EventCommandEventArgs>? m_eventCommandExecuted;
@@ -784,20 +785,20 @@ namespace System.Diagnostics.Tracing
 
             Debug.Assert(m_eventData != null);
             Debug.Assert(m_eventPipeProvider != null);
-            foreach (int metaKey in m_eventData.Keys)
+            int cnt = m_eventData.Length;
+            for (int i = 0; i < cnt; i++)
             {
-                ref EventMetadata eventMetadata = ref CollectionsMarshal.GetValueRefOrNullRef(m_eventData, metaKey);
-                uint eventID = (uint)eventMetadata.Descriptor.EventId;
+                uint eventID = (uint)m_eventData[i].Descriptor.EventId;
                 if (eventID == 0)
                     continue;
 
-                byte[]? metadata = EventPipeMetadataGenerator.Instance.GenerateEventMetadata(eventMetadata);
+                byte[]? metadata = EventPipeMetadataGenerator.Instance.GenerateEventMetadata(m_eventData[i]);
                 uint metadataLength = (metadata != null) ? (uint)metadata.Length : 0;
 
-                string eventName = eventMetadata.Name;
-                long keywords = eventMetadata.Descriptor.Keywords;
-                uint eventVersion = eventMetadata.Descriptor.Version;
-                uint level = eventMetadata.Descriptor.Level;
+                string eventName = m_eventData[i].Name;
+                long keywords = m_eventData[i].Descriptor.Keywords;
+                uint eventVersion = m_eventData[i].Descriptor.Version;
+                uint level = m_eventData[i].Descriptor.Level;
 
                 fixed (byte *pMetadata = metadata)
                 {
@@ -811,7 +812,7 @@ namespace System.Diagnostics.Tracing
                         metadataLength);
 
                     Debug.Assert(eventHandle != IntPtr.Zero);
-                    eventMetadata.EventHandle = eventHandle;
+                    m_eventData[i].EventHandle = eventHandle;
                 }
             }
         }
@@ -1373,7 +1374,7 @@ namespace System.Diagnostics.Tracing
                 Debug.Assert(m_eventData != null);  // You must have initialized this if you enabled the source.
                 try
                 {
-                    ref EventMetadata metadata = ref CollectionsMarshal.GetValueRefOrNullRef(m_eventData, eventId);
+                    ref EventMetadata metadata = ref m_eventData[eventId];
 
                     EventOpcode opcode = (EventOpcode)metadata.Descriptor.Opcode;
                     Guid* pActivityId = null;
@@ -1978,7 +1979,7 @@ namespace System.Diagnostics.Tracing
                 Debug.Assert(m_eventData != null);  // You must have initialized this if you enabled the source.
                 try
                 {
-                    ref EventMetadata metadata = ref CollectionsMarshal.GetValueRefOrNullRef(m_eventData, eventId);
+                    ref EventMetadata metadata = ref m_eventData[eventId];
 
                     if (childActivityID != null)
                     {
@@ -2132,7 +2133,7 @@ namespace System.Diagnostics.Tracing
         private unsafe void WriteToAllListeners(EventWrittenEventArgs eventCallbackArgs, int eventDataCount, EventData* data)
         {
             Debug.Assert(m_eventData != null);
-            ref EventMetadata metadata = ref CollectionsMarshal.GetValueRefOrNullRef(m_eventData, eventCallbackArgs.EventId);
+            ref EventMetadata metadata = ref m_eventData[eventCallbackArgs.EventId];
 
             if (eventDataCount != metadata.EventListenerParameterCount)
             {
@@ -2327,9 +2328,9 @@ namespace System.Diagnostics.Tracing
                 {
                     // if there's *any* enabled event on the dispatcher we'll write out the string
                     // otherwise we'll treat the listener as disabled and skip it
-                    foreach (bool enabled in dispatcher.m_EventEnabled.Values)
+                    for (int evtId = 0; evtId < dispatcher.m_EventEnabled.Length; ++evtId)
                     {
-                        if (enabled)
+                        if (dispatcher.m_EventEnabled[evtId])
                         {
                             dispatcherEnabled = true;
                             break;
@@ -2678,8 +2679,8 @@ namespace System.Diagnostics.Tracing
                 if (commandArgs.Command == EventCommand.Update)
                 {
                     // Set it up using the 'standard' filtering bitfields (use the "global" enable, not session specific one)
-                    foreach (int eventID in m_eventData.Keys)
-                        EnableEventForDispatcher(commandArgs.dispatcher, commandArgs.eventProviderType, eventID, IsEnabledByDefault(eventID, commandArgs.enable, commandArgs.level, commandArgs.matchAnyKeyword));
+                    for (int i = 0; i < m_eventData.Length; i++)
+                        EnableEventForDispatcher(commandArgs.dispatcher, commandArgs.eventProviderType, i, IsEnabledByDefault(i, commandArgs.enable, commandArgs.level, commandArgs.matchAnyKeyword));
 
                     if (commandArgs.enable)
                     {
@@ -2751,21 +2752,20 @@ namespace System.Diagnostics.Tracing
 
                         // There is a good chance EnabledForAnyListener are not as accurate as
                         // they could be, go ahead and get a better estimate.
-                        foreach (int eventID in m_eventData.Keys)
+                        for (int i = 0; i < m_eventData.Length; i++)
                         {
                             bool isEnabledForAnyListener = false;
                             for (EventDispatcher? dispatcher = m_Dispatchers; dispatcher != null; dispatcher = dispatcher.m_Next)
                             {
                                 Debug.Assert(dispatcher.m_EventEnabled != null);
 
-                                if (dispatcher.m_EventEnabled[eventID])
+                                if (dispatcher.m_EventEnabled[i])
                                 {
                                     isEnabledForAnyListener = true;
                                     break;
                                 }
                             }
-                            ref  EventMetadata eventMeta = ref CollectionsMarshal.GetValueRefOrNullRef(m_eventData, eventID);
-                            eventMeta.EnabledForAnyListener = isEnabledForAnyListener;
+                            m_eventData[i].EnabledForAnyListener = isEnabledForAnyListener;
                         }
 
                         // If no events are enabled, disable the global enabled bit.
@@ -2818,27 +2818,28 @@ namespace System.Diagnostics.Tracing
                 return false;
 
             Debug.Assert(m_eventData != null);
-            ref EventMetadata eventMeta = ref CollectionsMarshal.GetValueRefOrNullRef(m_eventData, eventId);
-            if (Unsafe.IsNullRef(ref eventMeta)) return false;
 
             if (dispatcher == null)
             {
+                if (eventId >= m_eventData.Length)
+                    return false;
+
                 if (m_etwProvider != null && eventProviderType == EventProviderType.ETW)
-                { eventMeta.EnabledForETW = value;}
+                    m_eventData[eventId].EnabledForETW = value;
 
 #if FEATURE_PERFTRACING
                 if (m_eventPipeProvider != null && eventProviderType == EventProviderType.EventPipe)
-                    {eventMeta.EnabledForEventPipe = value;}
+                    m_eventData[eventId].EnabledForEventPipe = value;
 #endif
             }
             else
             {
                 Debug.Assert(dispatcher.m_EventEnabled != null);
-                if (!dispatcher.m_EventEnabled.ContainsKey(eventId)) return false;
-
+                if (eventId >= dispatcher.m_EventEnabled.Length)
+                    return false;
                 dispatcher.m_EventEnabled[eventId] = value;
                 if (value)
-                    eventMeta.EnabledForAnyListener = true;
+                    m_eventData[eventId].EnabledForAnyListener = true;
             }
             return true;
         }
@@ -2849,10 +2850,11 @@ namespace System.Diagnostics.Tracing
         private bool AnyEventEnabled()
         {
             Debug.Assert(m_eventData != null);
-            foreach (EventMetadata eventMeta in m_eventData.Values)
-                if (eventMeta.EnabledForETW || eventMeta.EnabledForAnyListener
+
+            for (int i = 0; i < m_eventData.Length; i++)
+                if (m_eventData[i].EnabledForETW || m_eventData[i].EnabledForAnyListener
 #if FEATURE_PERFTRACING
-                        || eventMeta.EnabledForEventPipe
+                        || m_eventData[i].EnabledForEventPipe
 #endif // FEATURE_PERFTRACING
                     )
                     return true;
@@ -2891,15 +2893,7 @@ namespace System.Diagnostics.Tracing
                 EventDispatcher? dispatcher = m_Dispatchers;
                 while (dispatcher != null)
                 {
-                    Dictionary<int, bool> eventEnabled = new Dictionary<int, bool>(m_eventData?.Count ?? 0);
-                    if (m_eventData != null)
-                    {
-                        foreach (int eventId in m_eventData.Keys)
-                        {
-                            eventEnabled[eventId] = false;
-                        }
-                    }
-                    dispatcher.m_EventEnabled ??= eventEnabled;
+                    dispatcher.m_EventEnabled ??= new bool[m_eventData.Length];
                     dispatcher = dispatcher.m_Next;
                 }
 #if FEATURE_PERFTRACING
@@ -3155,13 +3149,12 @@ namespace System.Diagnostics.Tracing
                 MethodInfo[] methods = eventSourceType.GetMethods(BindingFlags.DeclaredOnly | BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance);
                 EventAttribute defaultEventAttribute;
                 int eventId = 1;        // The number given to an event that does not have a explicitly given ID.
-                Dictionary<int, EventMetadata>? eventData = null;
+                EventMetadata[]? eventData = null;
                 Dictionary<string, string>? eventsByName = null;
                 if (source != null || (flags & EventManifestOptions.Strict) != 0)
                 {
-                    eventData = new();
-                    ref EventMetadata newEventMetadata = ref CollectionsMarshal.GetValueRefOrAddDefault(eventData, 0, out _);
-                    newEventMetadata.Name = ""; // Event 0 is the 'write messages string' event, and has an empty name.
+                    eventData = new EventMetadata[methods.Length + 1];
+                    eventData[0].Name = "";         // Event 0 is the 'write messages string' event, and has an empty name.
                 }
 
                 // See if we have localization information.
@@ -3325,25 +3318,22 @@ namespace System.Diagnostics.Tracing
                                 {
                                     // Find the start associated with this stop event.  We require start to be immediately before the stop
                                     int startEventId = eventAttribute.EventId - 1;
-                                    Debug.Assert(0 <= startEventId);
-                                    if (eventData != null)
+                                    if (eventData != null && startEventId < eventData.Length)
                                     {
-                                        ref EventMetadata startEventMetadata = ref CollectionsMarshal.GetValueRefOrNullRef(eventData, startEventId);
-                                        if (!Unsafe.IsNullRef(ref startEventMetadata))
+                                        Debug.Assert(0 <= startEventId);                // Since we reserve id 0, we know that id-1 is <= 0
+                                        EventMetadata startEventMetadata = eventData[startEventId];
+
+                                        // If you remove the Stop and add a Start does that name match the Start Event's Name?
+                                        // Ideally we would throw an error
+                                        if (startEventMetadata.Descriptor.Opcode == (byte)EventOpcode.Start &&
+                                            startEventMetadata.Name.EndsWith(ActivityStartSuffix, StringComparison.Ordinal) &&
+                                            eventName.EndsWith(ActivityStopSuffix, StringComparison.Ordinal) &&
+                                            startEventMetadata.Name.AsSpan()[..^ActivityStartSuffix.Length].SequenceEqual(
+                                                eventName.AsSpan()[..^ActivityStopSuffix.Length]))
                                         {
-                                            // Since we reserve id 0, we know that id-1 is <= 0
-                                            // If you remove the Stop and add a Start does that name match the Start Event's Name?
-                                            // Ideally we would throw an error
-                                            if (startEventMetadata.Descriptor.Opcode == (byte)EventOpcode.Start &&
-                                                startEventMetadata.Name.EndsWith(ActivityStartSuffix, StringComparison.Ordinal) &&
-                                                eventName.EndsWith(ActivityStopSuffix, StringComparison.Ordinal) &&
-                                                startEventMetadata.Name.AsSpan()[..^ActivityStartSuffix.Length].SequenceEqual(
-                                                    eventName.AsSpan()[..^ActivityStopSuffix.Length]))
-                                            {
-                                                // Make the stop event match the start event
-                                                eventAttribute.Task = (EventTask)startEventMetadata.Descriptor.Task;
-                                                noTask = false;
-                                            }
+                                            // Make the stop event match the start event
+                                            eventAttribute.Task = (EventTask)startEventMetadata.Descriptor.Task;
+                                            noTask = false;
                                         }
                                     }
                                     if (noTask && (flags & EventManifestOptions.Strict) != 0)        // Throw an error if we can compatibly.
@@ -3404,6 +3394,7 @@ namespace System.Diagnostics.Tracing
                 if (source != null)
                 {
                     Debug.Assert(eventData != null);
+                    TrimEventDescriptors(ref eventData);
                     source.m_eventData = eventData;     // officially initialize it. We do this at most once (it is racy otherwise).
                     source.m_channelData = manifest.GetChannelData();
                 }
@@ -3503,13 +3494,21 @@ namespace System.Diagnostics.Tracing
         // with the code:EventAttribute 'eventAttribute'.  resourceManger may be null in which case we populate it
         // it is populated if we need to look up message resources
         private static void AddEventDescriptor(
-            [NotNull] ref Dictionary<int, EventMetadata> eventData,
+            [NotNull] ref EventMetadata[] eventData,
             string eventName,
             EventAttribute eventAttribute,
             ParameterInfo[] eventParameters,
             bool hasRelatedActivityID)
         {
-            ref EventMetadata metadata = ref CollectionsMarshal.GetValueRefOrAddDefault(eventData, eventAttribute.EventId, out _);
+            if (eventData.Length <= eventAttribute.EventId)
+            {
+                EventMetadata[] newValues = new EventMetadata[Math.Max(eventData.Length + 16, eventAttribute.EventId + 1)];
+                Array.Copy(eventData, newValues, eventData.Length);
+                eventData = newValues;
+            }
+
+            ref EventMetadata metadata = ref eventData[eventAttribute.EventId];
+
             metadata.Descriptor = new EventDescriptor(
                     eventAttribute.EventId,
                     eventAttribute.Version,
@@ -3564,22 +3563,35 @@ namespace System.Diagnostics.Tracing
             metadata.EventListenerParameterCount = eventListenerParameterCount;
         }
 
+        // Helper used by code:CreateManifestAndDescriptors that trims the m_eventData array to the correct
+        // size after all event descriptors have been added.
+        private static void TrimEventDescriptors(ref EventMetadata[] eventData)
+        {
+            int idx = eventData.Length;
+            while (0 < idx)
+            {
+                --idx;
+                if (eventData[idx].Descriptor.EventId != 0)
+                    break;
+            }
+            if (eventData.Length - idx > 2)      // allow one wasted slot.
+            {
+                EventMetadata[] newValues = new EventMetadata[idx + 1];
+                Array.Copy(eventData, newValues, newValues.Length);
+                eventData = newValues;
+            }
+        }
+
         // Helper used by code:EventListener.AddEventSource and code:EventListener.EventListener
         // when a listener gets attached to a eventSource
         internal void AddListener(EventListener listener)
         {
             lock (EventListener.EventListenersLock)
             {
-                Dictionary<int, bool>? enabledDict = null;
+                bool[]? enabledArray = null;
                 if (m_eventData != null)
-                {
-                    enabledDict = new Dictionary<int, bool>(m_eventData.Count);
-                    foreach (int eventId in m_eventData.Keys)
-                    {
-                        enabledDict[eventId] = false;
-                    }
-                }
-                m_Dispatchers = new EventDispatcher(m_Dispatchers, enabledDict, listener);
+                    enabledArray = new bool[m_eventData.Length];
+                m_Dispatchers = new EventDispatcher(m_Dispatchers, enabledArray, listener);
                 listener.OnEventSourceCreated(this);
             }
         }
@@ -3587,7 +3599,7 @@ namespace System.Diagnostics.Tracing
         // Helper used by code:CreateManifestAndDescriptors to find user mistakes like reusing an event
         // index for two distinct events etc.  Throws exceptions when it finds something wrong.
         private static void DebugCheckEvent(ref Dictionary<string, string>? eventsByName,
-            Dictionary<int, EventMetadata> eventData, MethodInfo method, EventAttribute eventAttribute,
+            EventMetadata[] eventData, MethodInfo method, EventAttribute eventAttribute,
             ManifestBuilder manifest, EventManifestOptions options)
         {
             int evtId = eventAttribute.EventId;
@@ -3598,7 +3610,7 @@ namespace System.Diagnostics.Tracing
                 manifest.ManifestError(SR.Format(SR.EventSource_MismatchIdToWriteEvent, evtName, evtId, eventArg), true);
             }
 
-            if (eventData.TryGetValue(evtId, out EventMetadata metadata) && metadata.Descriptor.EventId != 0)
+            if (evtId < eventData.Length && eventData[evtId].Descriptor.EventId != 0)
             {
                 manifest.ManifestError(SR.Format(SR.EventSource_EventIdReused, evtName, evtId), true);
             }
@@ -3606,7 +3618,7 @@ namespace System.Diagnostics.Tracing
             // We give a task to things if they don't have one.
             // TODO this is moderately expensive (N*N).   We probably should not even bother....
             Debug.Assert(eventAttribute.Task != EventTask.None || eventAttribute.Opcode != EventOpcode.Info);
-            foreach (int idx in eventData.Keys)
+            for (int idx = 0; idx < eventData.Length; ++idx)
             {
                 // skip unused Event IDs.
                 if (eventData[idx].Name == null)
@@ -4410,9 +4422,9 @@ namespace System.Diagnostics.Tracing
                     return;
                 }
 
-                foreach (bool value in eventDispatcher.m_EventEnabled.Values)
+                for (int i = 0; i < eventDispatcher.m_EventEnabled.Length; ++i)
                 {
-                    if (value)
+                    if (eventDispatcher.m_EventEnabled[i])
                     {
                         eventDispatcher.m_Listener.DisableEvents(eventSource);
                     }
@@ -4767,7 +4779,7 @@ namespace System.Diagnostics.Tracing
     /// </summary>
     public class EventWrittenEventArgs : EventArgs
     {
-        private ref EventSource.EventMetadata Metadata => ref CollectionsMarshal.GetValueRefOrNullRef(EventSource.m_eventData!, EventId);
+        private ref EventSource.EventMetadata Metadata => ref EventSource.m_eventData![EventId];
 
         /// <summary>
         /// The name of the event.
@@ -5232,7 +5244,7 @@ namespace System.Diagnostics.Tracing
     /// </summary>
     internal sealed class EventDispatcher
     {
-        internal EventDispatcher(EventDispatcher? next, Dictionary<int, bool>? eventEnabled, EventListener listener)
+        internal EventDispatcher(EventDispatcher? next, bool[]? eventEnabled, EventListener listener)
         {
             m_Next = next;
             m_EventEnabled = eventEnabled;
@@ -5241,7 +5253,7 @@ namespace System.Diagnostics.Tracing
 
         // Instance fields
         internal readonly EventListener m_Listener;   // The dispatcher this entry is for
-        internal Dictionary<int, bool>? m_EventEnabled;              // For every event in a the eventSource, is it enabled?
+        internal bool[]? m_EventEnabled;              // For every event in a the eventSource, is it enabled?
 
         // Only guaranteed to exist after a EnsureInit()
         internal EventDispatcher? m_Next;              // These form a linked list in code:EventSource.m_Dispatchers

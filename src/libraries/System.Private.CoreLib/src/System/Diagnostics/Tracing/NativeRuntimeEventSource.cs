@@ -2,8 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.ObjectModel;
-using System.Runtime.InteropServices;
-using System.Runtime.CompilerServices;
+
 namespace System.Diagnostics.Tracing
 {
     /// <summary>
@@ -50,14 +49,15 @@ namespace System.Diagnostics.Tracing
             {
                 return;
             }
+
             // Make sure the eventID is valid.
-            ref EventMetadata metadata = ref CollectionsMarshal.GetValueRefOrNullRef(m_eventData!, (int)eventID);
-            if (Unsafe.IsNullRef(ref metadata))
+            if (eventID >= m_eventData!.Length)
             {
                 return;
             }
+
             // Decode the payload.
-            object[] decodedPayloadFields = EventPipePayloadDecoder.DecodePayload(ref metadata, payload);
+            object[] decodedPayloadFields = EventPipePayloadDecoder.DecodePayload(ref m_eventData[eventID], payload);
 
             var eventCallbackArgs = new EventWrittenEventArgs(this, (int)eventID, &activityId, &childActivityId)
             {
