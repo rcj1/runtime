@@ -144,6 +144,22 @@ internal struct DacpReJitData
     public ClrDataAddress NativeCodeAddr;
 };
 
+internal struct DacpReJitData2
+{
+    public enum Flags : uint
+    {
+        kUnknown = 0,
+        kRequested = 1,
+        kActive = 2,
+        kReverted = 3,
+    };
+
+    public ulong rejitID;
+    public Flags flags; /* = Flags::kUnknown*/
+    public ClrDataAddress il;
+    public ClrDataAddress ilCodeVersionNodePtr;
+}
+
 internal struct DacpMethodDescData
 {
     public int bHasNativeCode;

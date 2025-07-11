@@ -1767,7 +1767,46 @@ internal sealed unsafe partial class SOSDacImpl
     int ISOSDacInterface7.GetPendingReJITID(ClrDataAddress methodDesc, int* pRejitId)
         => _legacyImpl7 is not null ? _legacyImpl7.GetPendingReJITID(methodDesc, pRejitId) : HResults.E_NOTIMPL;
     int ISOSDacInterface7.GetReJITInformation(ClrDataAddress methodDesc, int rejitId, /*struct DacpReJitData2*/ void* pRejitData)
-        => _legacyImpl7 is not null ? _legacyImpl7.GetReJITInformation(methodDesc, rejitId, pRejitData) : HResults.E_NOTIMPL;
+    {
+        // TODO
+        if (methodDesc == 0 || pRejitData == null || rejitId < 0)
+            return HResults.E_INVALIDARG;
+        int hr = HResults.S_OK;
+        try
+        {
+            ICodeVersions cv = _target.Contracts.CodeVersions;
+            IReJIT rejitContract = _target.Contracts.ReJIT;
+            TargetPointer methodDescPtr = methodDesc.ToTargetPointer(_target);
+            ILCodeVersionHandle ilCodeVersion = cv.GetILCodeVersions(methodDescPtr)
+                .FirstOrDefault(ilcode => rejitContract.GetRejitId(ilcode).Value == (ulong)rejitId,
+                    ILCodeVersionHandle.Invalid);
+
+            if (!ilCodeVersion.IsValid)
+                hr = HResults.E_INVALIDARG;
+            else
+            {
+                DacpReJitData2* rejitData = (DacpReJitData2*)pRejitData;
+                switch (rejitContract.GetRejitState(ilCodeVersion))
+                {
+                    case RejitState.Requested:
+                        rejitData->flags = DacpReJitData2.Flags.kRequested;
+                        break;
+                    case RejitState.Active:
+                        rejitData->flags = DacpReJitData2.Flags.kActive;
+                        break;
+                    default:
+                        rejitData->flags = DacpReJitData2.Flags.kUnknown;
+                        break;
+                }
+                rejitData->ilCodeVersionNodePtr = ilCodeVersion.ILCodeVersionNode.ToClrDataAddress(_target);
+            }
+        }
+        catch (System.Exception ex)
+        {
+            return ex.HResult;
+        }
+        return hr;
+    }
     int ISOSDacInterface7.GetProfilerModifiedILInformation(ClrDataAddress methodDesc, /*struct DacpProfilerILData*/ void* pILData)
         => _legacyImpl7 is not null ? _legacyImpl7.GetProfilerModifiedILInformation(methodDesc, pILData) : HResults.E_NOTIMPL;
     int ISOSDacInterface7.GetMethodsWithProfilerModifiedIL(ClrDataAddress mod, ClrDataAddress* methodDescs, int cMethodDescs, int* pcMethodDescs)
