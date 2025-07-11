@@ -852,7 +852,31 @@ internal sealed unsafe partial class SOSDacImpl
     }
 
     int ISOSDacInterface.GetMethodDescTransparencyData(ClrDataAddress methodDesc, void* data)
-        => _legacyImpl is not null ? _legacyImpl.GetMethodDescTransparencyData(methodDesc, data) : HResults.E_NOTIMPL;
+    {
+        // TODO
+        int hr = HResults.S_OK;
+        if (methodDesc == 0 || data == null)
+            return HResults.E_INVALIDARG;
+        try
+        {
+            IRuntimeTypeSystem rts = _target.Contracts.RuntimeTypeSystem;
+            TargetPointer methodDescPtr = methodDesc.ToTargetPointer(_target);
+            try
+            {
+                rts.GetMethodDescHandle(methodDescPtr);
+            }
+            catch (System.Exception)
+            {
+                return HResults.E_INVALIDARG; // invalid method desc
+            }
+            NativeMemory.Clear(data, (nuint)sizeof(DacpReJitData));
+        }
+        catch (System.Exception ex)
+        {
+            return ex.HResult;
+        }
+        return 0;
+    }
     int ISOSDacInterface.GetMethodTableData(ClrDataAddress mt, DacpMethodTableData* data)
     {
         if (mt == 0 || data == null)
