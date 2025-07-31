@@ -64,6 +64,8 @@ partial interface IRuntimeTypeSystem : IContract
     public ushort GetNumThreadStaticFields(TypeHandle typeHandle);
     public TargetPointer GetFieldDescList(TypeHandle typeHandle);
     public virtual ReadOnlySpan<TypeHandle> GetInstantiation(TypeHandle typeHandle);
+    public bool IsClassInited(TypeHandle typeHandle);
+    public bool IsInitError(TypeHandle typeHandle);
     public virtual bool IsGenericTypeDefinition(TypeHandle typeHandle);
 
     public virtual bool HasTypeParam(TypeHandle typeHandle);
@@ -347,6 +349,7 @@ The contract additionally depends on these data descriptors
 | `MethodTable` | `NumInterfaces` | Number of interfaces of `MethodTable` |
 | `MethodTable` | `NumVirtuals` | Number of virtual methods in `MethodTable` |
 | `MethodTable` | `PerInstInfo` | Either the array element type, or pointer to generic information for `MethodTable` |
+| `MethodTableAuxiliaryData` | `Flags` | Flags of `MethodTableAuxiliaryData` |
 | `EEClass` | `InternalCorElementType` | An InternalCorElementType uses the enum values of a CorElementType to indicate some of the information about the type of the type which uses the EEClass In particular, all reference types are CorElementType.Class, Enums are the element type of their underlying type and ValueTypes which can exactly be represented as an element type are represented as such, all other values types are represented as CorElementType.ValueType. |
 | `EEClass` | `MethodTable` | Pointer to the canonical MethodTable of this type |
 | `EEClass` | `NumMethods` | Count of methods attached to the EEClass |
@@ -479,6 +482,20 @@ The contract additionally depends on these data descriptors
             instantiation[i] = GetTypeHandle(_target.ReadPointer(dictionaryPointer + _target.PointerSize * i));
 
         return instantiation;
+    }
+
+    public bool IsClassInited(TypeHandle typeHandle)
+    {
+        MethodTable methodTable = _methodTables[typeHandle.Address];
+        MethodTableAuxiliaryData auxiliaryData = new MethodTableAuxiliaryData(methodTable.AuxiliaryData);
+        return (auxiliaryData.Flags & (uint)MethodTableAuxiliaryFlags.Initialized) != 0;
+    }
+
+    public bool IsInitError(TypeHandle typeHandle)
+    {
+        MethodTable methodTable = _methodTables[typeHandle.Address];
+        MethodTableAuxiliaryData auxiliaryData = new MethodTableAuxiliaryData(methodTable.AuxiliaryData);
+        return (auxiliaryData.Flags & (uint)MethodTableAuxiliaryFlags.IsInitError) != 0;
     }
 
     public bool IsDynamicStatics(TypeHandle TypeHandle) => !typeHandle.IsMethodTable() ? false : _methodTables[TypeHandle.Address].Flags.IsDynamicStatics;
