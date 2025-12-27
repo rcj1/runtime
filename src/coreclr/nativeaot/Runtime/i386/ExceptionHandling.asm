@@ -103,7 +103,7 @@ FASTCALL_ENDFUNC
 FASTCALL_FUNC  RhpThrowExact, 4
 
         mov         edi, 4                  ;; edi = ExKind.RethrowFlag
-        jmp         RhpThrowExImpl
+        jmp         @F
 
 FASTCALL_ENDFUNC
 
@@ -120,9 +120,7 @@ FASTCALL_FUNC  RhpThrowEx, 4
 
         mov         edi, 1                  ;; edi = ExKind.Throw
 
-ALTERNATE_ENTRY RhpThrowExImpl
-
-        esp_offsetof_ExInfo     textequ %0
+    @@: esp_offsetof_ExInfo     textequ %0  ;; RhpThrowExImpl
         esp_offsetof_Context    textequ %SIZEOF__ExInfo
 
         push        ebp
@@ -166,7 +164,8 @@ ALTERNATE_ENTRY RhpThrowExImpl
         mov     [edx + OFFSETOF__ExInfo__m_exception], esi          ;; init the exception object to null
         mov     byte ptr [edx + OFFSETOF__ExInfo__m_passNumber], 1  ;; init to the first pass
         mov     dword ptr [edx + OFFSETOF__ExInfo__m_idxCurClause], 0FFFFFFFFh
-        mov     byte ptr [edx + OFFSETOF__ExInfo__m_kind], dil      ;; ExKind (from edi/dil)
+        mov     ebx, edi                                            ;; ebx <- ExKind (edi has value 1 or 4)
+        mov     byte ptr [edx + OFFSETOF__ExInfo__m_kind], bl       ;; ExKind (from edi via bl)
 
         ;; link the ExInfo into the thread's ExInfo chain
         mov     ebx, [eax + OFFSETOF__Thread__m_pExInfoStackHead]
@@ -182,7 +181,6 @@ ALTERNATE_ENTRY RhpThrowExImpl
         call    RhThrowEx
 
 ALTERNATE_ENTRY _RhpThrowEx2
-ALTERNATE_ENTRY _RhpThrowExact2
 
         ;; no return
         int 3

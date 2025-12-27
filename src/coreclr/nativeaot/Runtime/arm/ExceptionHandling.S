@@ -90,12 +90,12 @@ NESTED_END RhpThrowHwEx
 // OUTPUT:
 //
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
-NESTED_ENTRY RhpThrowExact, _TEXT, NoHandler
+LEAF_ENTRY RhpThrowExact, _TEXT, NoHandler
 
         mov         r5, #4                                          // r5 = ExKind.RethrowFlag
         b           LOCAL_LABEL(RhpThrowExImpl)
 
-NESTED_END RhpThrowExact, _TEXT
+LEAF_END RhpThrowExact, _TEXT
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //
@@ -199,7 +199,6 @@ LOCAL_LABEL(NotHiJacked):
         bl          C_FUNC(RhThrowEx)
 
 GLOBAL_LABEL RhpThrowEx2
-GLOBAL_LABEL RhpThrowExact2
 
         // no return
         EMIT_BREAKPOINT
