@@ -166,10 +166,12 @@ namespace System.Diagnostics
         [System.Runtime.CompilerServices.RuntimeAsyncMethodGeneration(true)]
         public static async Task<int> Quuux()
         {
+            Debugger.Break();
+#line 314 "Program.cs"
             var task = Quuux2();
             await Task.Yield();
-#line 8 "Program.cs"
             return await task;
+            // else return -1;
         }
 
         [MethodImpl(MethodImplOptions.NoOptimization | MethodImplOptions.NoInlining)]
@@ -627,12 +629,13 @@ namespace System.Diagnostics.Tests
 
         [ConditionalTheory(typeof(PlatformDetection), nameof(PlatformDetection.IsRuntimeAsyncSupported))]
         [MemberData(nameof(Ctor_Async_TestData))]
-        public async Task ToString_Async(Func<Task> asyncMethod, string[] expectedPatterns)
+        [MethodImpl(MethodImplOptions.NoOptimization | MethodImplOptions.NoInlining)]
+        public void ToString_Async(Func<Task> asyncMethod, string[] expectedPatterns)
         {
             Exception? caughtException = null;
             try
             {
-                await asyncMethod();
+                asyncMethod().GetAwaiter().GetResult();
             }
             catch (Exception ex)
             {
@@ -642,10 +645,13 @@ namespace System.Diagnostics.Tests
             Assert.NotNull(caughtException);
 
             string exceptionText = caughtException.ToString();
+            Console.WriteLine(exceptionText);
 
             foreach (string pattern in expectedPatterns)
             {
-                Assert.Matches(pattern, exceptionText);
+    Assert.True(
+        Regex.IsMatch(exceptionText, pattern),
+        $"Pattern '{pattern}' did not match. Full text:{Environment.NewLine}{exceptionText}");
             }
         }
 
