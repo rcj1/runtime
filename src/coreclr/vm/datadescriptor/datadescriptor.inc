@@ -1024,12 +1024,12 @@ CDAC_TYPE_FIELD(DynamicILBlobTable, /*uint32*/, EntryMethodToken, cdac_data<Dyna
 CDAC_TYPE_FIELD(DynamicILBlobTable, /*pointer*/, EntryIL, cdac_data<DynamicILBlobTable>::EntryIL)
 CDAC_TYPE_END(DynamicILBlobTable)
 
-// #ifdef FEATURE_COMWRAPPERS
-// CDAC_TYPE_BEGIN(ComWrappersVtablePtrs)
-// CDAC_TYPE_FIELD(ComWrappersVtablePtrs, /*pointer*/, MowQueryInterface, offsetof(ComWrappersVtablePtrs, MowQueryInterface))
-// CDAC_TYPE_FIELD(ComWrappersVtablePtrs, /*pointer*/, TtQueryInterface, offsetof(ComWrappersVtablePtrs, TtQueryInterface))
-// CDAC_TYPE_END(ComWrappersVtablePtrs)
-// #endif
+#ifdef FEATURE_COMWRAPPERS
+CDAC_TYPE_BEGIN(ComWrappersVtablePtrs)
+CDAC_TYPE_FIELD(ComWrappersVtablePtrs, /*pointer*/, MowQueryInterface, 0)
+CDAC_TYPE_FIELD(ComWrappersVtablePtrs, /*pointer*/, TtQueryInterface, sizeof(uintptr_t))
+CDAC_TYPE_END(ComWrappersVtablePtrs)
+#endif
 
 CDAC_TYPES_END()
 

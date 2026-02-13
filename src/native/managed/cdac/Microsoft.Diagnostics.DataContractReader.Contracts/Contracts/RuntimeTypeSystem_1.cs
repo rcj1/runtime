@@ -910,8 +910,8 @@ internal partial struct RuntimeTypeSystem_1 : IRuntimeTypeSystem
         var typeInfo = _target.GetTypeInfo(DataType.CoreLibClassDescription);
         TargetPointer coreLibClassDescriptionPtr = coreLibData.ClassDescriptions + index * typeInfo.Size!.Value;
         CoreLibClassDescription coreLibClassDescription = _target.ProcessedData.GetOrAdd<CoreLibClassDescription>(coreLibClassDescriptionPtr);
-        nameSpace = coreLibClassDescription.NameSpace;
-        name = coreLibClassDescription.Name;
+        nameSpace = _target.ReadUtf8String(coreLibClassDescription.NameSpace);
+        name = _target.ReadUtf8String(coreLibClassDescription.Name);
     }
 
     public bool IsGenericVariable(TypeHandle typeHandle, out TargetPointer module, out uint token)
