@@ -132,8 +132,6 @@ public class BuiltInCOMDumpTests : DumpTestBase
         foreach (TargetPointer ccwPtr in ccwPtrs)
         {
             SimpleComCallWrapperData sccwData = builtInCOM.GetSimpleComCallWrapperData(builtInCOM.GetSimpleComCallWrapper(ccwPtr));
-            TargetPointer startCCW = sccwData.MainWrapper;
-            Assert.NotEqual(TargetPointer.Null, startCCW);
 
             // A live CCW (not neutered) should have a positive ref count and a strong ref.
             Assert.False(sccwData.IsNeutered,
@@ -144,11 +142,12 @@ public class BuiltInCOMDumpTests : DumpTestBase
                 $"Expected strong handle for CCW at 0x{ccwPtr:X}");
 
             // The handle should be populated and dereferenceable to a managed object.
-            Assert.NotEqual(TargetPointer.Null, sccwData.Handle,
+            TargetPointer handle = builtInCOM.GetObjectHandle(ccwPtr);
+            Assert.NotEqual(TargetPointer.Null, handle,
                 $"Expected non-null handle for CCW at 0x{ccwPtr:X}");
 
             // InterfaceCount should be consistent with GetCCWInterfaces().
-            int ifaceCount = builtInCOM.GetCCWInterfaces(startCCW).Count();
+            int ifaceCount = builtInCOM.GetCCWInterfaces(ccwPtr).Count();
             Assert.True(ifaceCount >= 0,
                 $"Expected non-negative interface count for CCW at 0x{ccwPtr:X}");
         }

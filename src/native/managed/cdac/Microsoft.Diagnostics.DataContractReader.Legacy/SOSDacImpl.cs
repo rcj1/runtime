@@ -599,6 +599,7 @@ public sealed unsafe partial class SOSDacImpl
             if (ccw == 0 || data == null)
                 throw new ArgumentException();
 
+            *data = default;
             Contracts.IBuiltInCOM contract = _target.Contracts.BuiltInCOM;
             // Try to resolve as a COM interface pointer; if not recognised, treat as a direct CCW pointer.
             TargetPointer ccwPtr = contract.GetCCWFromInterfacePointer(ccw.ToTargetPointer(_target));
@@ -606,18 +607,18 @@ public sealed unsafe partial class SOSDacImpl
                 ccwPtr = ccw.ToTargetPointer(_target);
 
             SimpleComCallWrapperData sccwData = contract.GetSimpleComCallWrapperData(contract.GetSimpleComCallWrapper(ccwPtr));
-            TargetPointer startCCW = sccwData.MainWrapper;
-            TargetPointer managedObject = sccwData.Handle != TargetPointer.Null
-                ? _target.ReadPointer(sccwData.Handle)
-                : TargetPointer.Null;
             int refCount = (int)sccwData.RefCount;
 
             data->outerIUnknown = sccwData.OuterIUnknown.ToClrDataAddress(_target);
-            data->managedObject = managedObject.ToClrDataAddress(_target);
-            data->handle = sccwData.Handle.ToClrDataAddress(_target);
-            data->ccwAddress = startCCW.ToClrDataAddress(_target);
+            TargetPointer handle = contract.GetObjectHandle(ccwPtr);
+            data->handle = handle.ToClrDataAddress(_target);
+            if (handle != TargetPointer.Null)
+            {
+                data->managedObject = _target.ReadPointer(handle).ToClrDataAddress(_target);
+            }
+            data->ccwAddress = ccwPtr.ToClrDataAddress(_target);
             data->refCount = refCount;
-            data->interfaceCount = contract.GetCCWInterfaces(startCCW).Count();
+            data->interfaceCount = contract.GetCCWInterfaces(ccwPtr).Count();
             data->isNeutered = sccwData.IsNeutered ? Interop.BOOL.TRUE : Interop.BOOL.FALSE;
             data->jupiterRefCount = 0;
             data->isPegged = Interop.BOOL.FALSE;
@@ -715,7 +716,7 @@ public sealed unsafe partial class SOSDacImpl
 #if DEBUG
         if (_legacyImpl is not null)
         {
-            DacpCOMInterfacePointerData[]? interfacesLocal = count > 0 && interfaces != null ? new DacpCOMInterfacePointerData[(int)count] : null;
+            DacpCOMInterfacePointerData[]? interfacesLocal = interfaces != null ? new DacpCOMInterfacePointerData[(int)count] : null;
             uint pNeededLocal = 0;
             int hrLocal = _legacyImpl.GetCCWInterfaces(ccw, count, interfacesLocal, pNeeded == null && interfacesLocal == null ? null : &pNeededLocal);
             Debug.ValidateHResult(hr, hrLocal);

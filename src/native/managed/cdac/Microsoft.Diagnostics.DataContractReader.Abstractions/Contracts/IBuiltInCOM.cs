@@ -15,7 +15,7 @@ public readonly struct COMInterfacePointerData
 /// <summary>Data read from a SimpleComCallWrapper.</summary>
 public readonly struct SimpleComCallWrapperData
 {
-    /// <summary>The visible reference count (raw refcount with CLEANUP_SENTINEL and other non-count bits masked off via ComRefcountMask).</summary>
+    /// <summary>The visible reference count (raw refcount with CLEANUP_SENTINEL and other non-count bits masked off via COM_REFCOUNT_MASK).</summary>
     public ulong RefCount { get; init; }
     /// <summary>True if the CCW has been neutered (CLEANUP_SENTINEL bit was set in the raw ref count).</summary>
     public bool IsNeutered { get; init; }
@@ -27,10 +27,6 @@ public readonly struct SimpleComCallWrapperData
     public bool IsHandleWeak { get; init; }
     /// <summary>Outer IUnknown pointer for aggregated CCWs (m_pOuter).</summary>
     public TargetPointer OuterIUnknown { get; init; }
-    /// <summary>GC object handle (m_ppThis) of the start ComCallWrapper.</summary>
-    public TargetPointer Handle { get; init; }
-    /// <summary>Pointer to the start (first) ComCallWrapper in the chain.</summary>
-    public TargetPointer MainWrapper { get; init; }
 }
 
 /// <summary>Data for a single RCW entry in the RCW cleanup list.</summary>
@@ -54,6 +50,8 @@ public interface IBuiltInCOM : IContract
     // Returns the data stored in a SimpleComCallWrapper.
     // sccw must be a SimpleComCallWrapper address (obtain via GetSimpleComCallWrapper).
     SimpleComCallWrapperData GetSimpleComCallWrapperData(TargetPointer sccw) => throw new NotImplementedException();
+    // Returns the GC object handle (m_ppThis) from the given ComCallWrapper.
+    TargetPointer GetObjectHandle(TargetPointer ccw) => throw new NotImplementedException();
     IEnumerable<RCWCleanupInfo> GetRCWCleanupList(TargetPointer cleanupListPtr) => throw new NotImplementedException();
 }
 
