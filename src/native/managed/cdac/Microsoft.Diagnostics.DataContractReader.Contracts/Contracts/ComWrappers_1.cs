@@ -12,6 +12,10 @@ internal readonly struct ComWrappers_1 : IComWrappers
 {
     private const string NativeObjectWrapperNamespace = "System.Runtime.InteropServices";
     private const string NativeObjectWrapperName = "ComWrappers+NativeObjectWrapper";
+    private const string ComWrappersNamespace = "System.Runtime.InteropServices";
+    private const string ComWrappersName = "ComWrappers";
+    private const string NativeObjectWrapperCWTFieldName = "s_nativeObjectWrapperTable";
+    private const string AllManagedObjectWrapperTableFieldName = "s_allManagedObjectWrapperTable";
     private readonly Target _target;
 
     public ComWrappers_1(Target target)
@@ -83,4 +87,25 @@ internal readonly struct ComWrappers_1 : IComWrappers
         TargetPointer typeHandlePtr = rts.GetTypeByNameAndModule(NativeObjectWrapperName, NativeObjectWrapperNamespace, moduleHandle).Address;
         return mt == typeHandlePtr;
     }
+
+    private TargetPointer GetComWrappersFieldAddress(string fieldName)
+    {
+        // get system module
+        ILoader loader = _target.Contracts.Loader;
+        TargetPointer systemAssembly = loader.GetSystemAssembly();
+        ModuleHandle moduleHandle = loader.GetModuleHandleFromAssemblyPtr(systemAssembly);
+
+        // lookup by name
+        IRuntimeTypeSystem rts = _target.Contracts.RuntimeTypeSystem;
+        TypeHandle th = rts.GetTypeByNameAndModule(ComWrappersName, ComWrappersNamespace, moduleHandle);
+        TargetPointer fieldDescPtr = rts.GetFieldDescByName(th, NativeObjectWrapperCWTFieldName, moduleHandle);
+        return rts.GetStaticAddress(fieldDescPtr);
+    }
+
+    public TargetPointer GetComWrappersRCWForObject(TargetPointer obj)
+    {
+        TargetPointer cwtTableAddr = GetComWrappersFieldAddress(NativeObjectWrapperCWTFieldName);
+    }
+
+    public TargetPointer Get
 }

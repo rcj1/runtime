@@ -85,6 +85,7 @@ public static class Constants
         public const string MaxClrNotificationArgs = nameof(MaxClrNotificationArgs);
         public const string ClrNotificationArguments = nameof(ClrNotificationArguments);
         public const string FieldOffsetBigRVA = nameof(FieldOffsetBigRVA);
+        public const string FieldOffsetDynamicRVA = nameof(FieldOffsetDynamicRVA);
         public const string PlatformMetadata = nameof(PlatformMetadata);
         public const string ProfilerControlBlock = nameof(ProfilerControlBlock);
 
