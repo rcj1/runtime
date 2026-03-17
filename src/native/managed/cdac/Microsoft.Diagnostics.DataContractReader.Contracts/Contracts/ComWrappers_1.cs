@@ -107,5 +107,17 @@ internal readonly struct ComWrappers_1 : IComWrappers
         TargetPointer cwtTableAddr = GetComWrappersFieldAddress(NativeObjectWrapperCWTFieldName);
     }
 
-    public TargetPointer Get
+    public List<TargetPointer> GetMOWList(TargetPointer obj)
+    {
+        TargetPointer allMOWTableAddr = GetComWrappersFieldAddress(AllManagedObjectWrapperTableFieldName);
+        Data.AllManagedObjectWrapperTable allMOWTable = _target.ProcessedData.GetOrAdd<Data.AllManagedObjectWrapperTable>(allMOWTableAddr);
+        List<TargetPointer> mows = new();
+        foreach (TargetPointer mow in allMOWTable.MOWs)
+        {
+            Data.ManagedObjectWrapperHolderObject mowHolderObject = _target.ProcessedData.GetOrAdd<Data.ManagedObjectWrapperHolderObject>(mow);
+            if (mowHolderObject.WrappedObject == obj)
+                mows.Add(mow);
+        }
+        return mows;
+    }
 }
