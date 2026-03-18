@@ -149,6 +149,7 @@ public static class Constants
         public const string HandleTableMap = nameof(HandleTableMap);
         public const string InitialHandleTableArraySize = nameof(InitialHandleTableArraySize);
         public const string DebugDestroyedHandleValue = nameof(DebugDestroyedHandleValue);
+        public const string HandleSegmentSize = nameof(HandleSegmentSize);
         public const string HandleBlocksPerSegment = nameof(HandleBlocksPerSegment);
         public const string HandleMaxInternalTypes = nameof(HandleMaxInternalTypes);
         public const string HandlesPerBlock = nameof(HandlesPerBlock);
