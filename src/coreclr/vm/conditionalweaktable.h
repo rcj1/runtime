@@ -21,6 +21,7 @@ typedef DPTR(ConditionalWeakTableObject) CONDITIONAL_WEAK_TABLE_REF;
 class ConditionalWeakTableContainerObject final : public Object
 {
     friend class CoreLibBinder;
+    friend struct ::cdac_data<ConditionalWeakTableContainerObject>;
     struct Entry
     {
         int32_t HashCode;
@@ -43,6 +44,18 @@ public:
     bool TryGetValue(OBJECTREF key, OBJECTREF* value);
 #endif
 };
+
+template<>
+struct cdac_data<ConditionalWeakTableContainerObject>
+{
+    static constexpr size_t Buckets = offsetof(ConditionalWeakTableContainerObject, _buckets);
+    static constexpr size_t Entries = offsetof(ConditionalWeakTableContainerObject, _entries);
+    static constexpr size_t EntrySize = sizeof(ConditionalWeakTableContainerObject::Entry);
+    static constexpr size_t EntryHashCode = offsetof(ConditionalWeakTableContainerObject::Entry, HashCode);
+    static constexpr size_t EntryNext = offsetof(ConditionalWeakTableContainerObject::Entry, Next);
+    static constexpr size_t EntryDepHnd = offsetof(ConditionalWeakTableContainerObject::Entry, depHnd);
+};
+
 
 class ConditionalWeakTableObject final : public Object
 {

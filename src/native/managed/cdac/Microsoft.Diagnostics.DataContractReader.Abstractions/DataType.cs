@@ -172,4 +172,6 @@ public enum DataType
     HandleTableBucket,
     HandleTable,
     TableSegment,
+    ConditionalWeakTable,
+    ConditionalWeakTableEntry,
 }
