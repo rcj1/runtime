@@ -55,7 +55,6 @@ public static class Constants
         public const string StressLogValidChunkSig = nameof(StressLogValidChunkSig);
 
         public const string MethodDescAlignment = nameof(MethodDescAlignment);
-        public const string ObjectHeaderSize = nameof(ObjectHeaderSize);
         public const string ArrayBaseSize = nameof(ArrayBaseSize);
         public const string SyncBlockValueToObjectOffset = nameof(SyncBlockValueToObjectOffset);
 
@@ -67,6 +66,7 @@ public static class Constants
         public const string SyncBlockIsHashOrSyncBlockIndex = nameof(SyncBlockIsHashOrSyncBlockIndex);
         public const string SyncBlockIsHashCode = nameof(SyncBlockIsHashCode);
         public const string SyncBlockIndexMask = nameof(SyncBlockIndexMask);
+        public const string SyncBlockHashCodeMask = nameof(SyncBlockHashCodeMask);
 
         public const string ArrayBoundsZero = nameof(ArrayBoundsZero);
         public const string CoreLib = nameof(CoreLib);

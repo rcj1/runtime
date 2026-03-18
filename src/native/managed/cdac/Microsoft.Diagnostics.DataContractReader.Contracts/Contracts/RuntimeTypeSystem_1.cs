@@ -1741,37 +1741,41 @@ internal partial struct RuntimeTypeSystem_1 : IRuntimeTypeSystem
         return TargetPointer.Null;
     }
 
-    private TargetPointer GetStaticAddressHandle(uint @base, uint offset, bool isRVA, TargetPointer fieldDescPointer, ModuleHandle moduleHandle)
+    private TargetPointer GetStaticAddressHandle(TargetPointer @base, uint offset, bool isRVA, TargetPointer fieldDescPointer, ModuleHandle moduleHandle)
     {
-        if (!isRVA)
-            return new TargetPointer(@base + offset);
-
-        if (offset == _target.ReadGlobal<uint>(Constants.Globals.FieldOffsetDynamicRVA))
+        if (isRVA)
         {
-            return loader.GetDynamicIL(moduleHandle, GetFieldDescMemberDef(fieldDescPointer));
+            ILoader loader = _target.Contracts.Loader;
+            if (offset == _target.ReadGlobal<uint>(Constants.Globals.FieldOffsetDynamicRVA))
+            {
+                return loader.GetDynamicIL(moduleHandle, ((IRuntimeTypeSystem)this).GetFieldDescMemberDef(fieldDescPointer));
+            }
+            TargetPointer peAssembly = loader.GetPEAssembly(moduleHandle);
+            return loader.GetFieldRvaData(peAssembly, (int)offset);
         }
-        return loader.GetFieldRvaData(moduleHandle, offset);
+        return new TargetPointer(@base + offset);
     }
 
-    private TargetPointer GetStaticAddress(TargetPointer fieldDescPointer)
+    TargetPointer IRuntimeTypeSystem.GetFieldDescStaticAddress(TargetPointer fieldDescPointer)
     {
         Data.FieldDesc fieldDesc = _target.ProcessedData.GetOrAdd<Data.FieldDesc>(fieldDescPointer);
-        TargetPointer enclosingMT = GetMTOfEnclosingClass(fieldDescPointer);
+        TargetPointer enclosingMT = ((IRuntimeTypeSystem)this).GetMTOfEnclosingClass(fieldDescPointer);
         TypeHandle ctx = GetTypeHandle(enclosingMT);
         TargetPointer modulePtr = GetModule(ctx);
         ILoader loader = _target.Contracts.Loader;
         ModuleHandle moduleHandle = loader.GetModuleHandleFromModulePtr(modulePtr);
-        CorElementType type = GetFieldDescType(fieldDescPointer);
+        CorElementType type = ((IRuntimeTypeSystem)this).GetFieldDescType(fieldDescPointer);
+        TargetPointer @base;
         if (type == CorElementType.Class || type == CorElementType.ValueType)
         {
-            uint @base = GetGCStaticsBasePointer(ctx);
+            @base = GetGCStaticsBasePointer(ctx);
         }
         else
         {
-            uint @base = GetNonGCStaticsBasePointer(ctx);
+            @base = GetNonGCStaticsBasePointer(ctx);
         }
 
-        uint offset = (IRuntimeTypeSystem(this)).GetFieldDescOffset(fieldDescPointer, default);
+        uint offset = ((IRuntimeTypeSystem)this).GetFieldDescOffset(fieldDescPointer, default);
         bool isRVA = IsFieldDescRVA(fieldDescPointer);
         TargetPointer handleAddr = GetStaticAddressHandle(@base, offset, isRVA, fieldDescPointer, moduleHandle);
         if (type == CorElementType.ValueType && !isRVA)

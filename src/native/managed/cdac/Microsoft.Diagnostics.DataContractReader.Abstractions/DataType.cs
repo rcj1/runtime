@@ -89,6 +89,7 @@ public enum DataType
     Array,
     SyncBlock,
     SyncTableEntry,
+    ObjectHeader,
     InteropSyncBlockInfo,
     SyncBlockCache,
     InstantiatedMethodDesc,

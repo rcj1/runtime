@@ -98,26 +98,27 @@ internal readonly struct ComWrappers_1 : IComWrappers
         // lookup by name
         IRuntimeTypeSystem rts = _target.Contracts.RuntimeTypeSystem;
         TypeHandle th = rts.GetTypeByNameAndModule(ComWrappersName, ComWrappersNamespace, moduleHandle);
-        TargetPointer fieldDescPtr = rts.GetFieldDescByName(th, NativeObjectWrapperCWTFieldName, moduleHandle);
-        return rts.GetStaticAddress(fieldDescPtr);
+        TargetPointer fieldDescPtr = rts.GetFieldDescByName(th, NativeObjectWrapperCWTFieldName);
+        return rts.GetFieldDescStaticAddress(fieldDescPtr);
     }
 
     public TargetPointer GetComWrappersRCWForObject(TargetPointer obj)
     {
         TargetPointer cwtTableAddr = GetComWrappersFieldAddress(NativeObjectWrapperCWTFieldName);
+        return cwtTableAddr;
     }
 
     public List<TargetPointer> GetMOWList(TargetPointer obj)
     {
         TargetPointer allMOWTableAddr = GetComWrappersFieldAddress(AllManagedObjectWrapperTableFieldName);
-        Data.AllManagedObjectWrapperTable allMOWTable = _target.ProcessedData.GetOrAdd<Data.AllManagedObjectWrapperTable>(allMOWTableAddr);
+        // Data.AllManagedObjectWrapperTable allMOWTable = _target.ProcessedData.GetOrAdd<Data.AllManagedObjectWrapperTable>(allMOWTableAddr);
         List<TargetPointer> mows = new();
-        foreach (TargetPointer mow in allMOWTable.MOWs)
-        {
-            Data.ManagedObjectWrapperHolderObject mowHolderObject = _target.ProcessedData.GetOrAdd<Data.ManagedObjectWrapperHolderObject>(mow);
-            if (mowHolderObject.WrappedObject == obj)
-                mows.Add(mow);
-        }
+        // foreach (TargetPointer mow in allMOWTable.MOWs)
+        // {
+        //     Data.ManagedObjectWrapperHolderObject mowHolderObject = _target.ProcessedData.GetOrAdd<Data.ManagedObjectWrapperHolderObject>(mow);
+        //     if (mowHolderObject.WrappedObject == obj)
+        //         mows.Add(mow);
+        // }
         return mows;
     }
 }
