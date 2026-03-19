@@ -11,8 +11,8 @@ internal sealed class ConditionalWeakTable : IData<ConditionalWeakTable>
     public ConditionalWeakTable(Target target, TargetPointer address)
     {
         Target.TypeInfo type = target.GetTypeInfo(DataType.ConditionalWeakTable);
-        Buckets = target.ReadPointer(address + (ulong)type.Fields[nameof(Buckets)].Offset);
-        Entries = target.ReadPointer(address + (ulong)type.Fields[nameof(Entries)].Offset);
+        Buckets = address + (ulong)type.Fields[nameof(Buckets)].Offset;
+        Entries = address + (ulong)type.Fields[nameof(Entries)].Offset;
     }
 
     public TargetPointer Buckets { get; init; }

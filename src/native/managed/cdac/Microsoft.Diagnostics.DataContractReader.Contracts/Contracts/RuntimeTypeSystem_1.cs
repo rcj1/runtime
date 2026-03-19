@@ -1758,7 +1758,6 @@ internal partial struct RuntimeTypeSystem_1 : IRuntimeTypeSystem
 
     TargetPointer IRuntimeTypeSystem.GetFieldDescStaticAddress(TargetPointer fieldDescPointer)
     {
-        Data.FieldDesc fieldDesc = _target.ProcessedData.GetOrAdd<Data.FieldDesc>(fieldDescPointer);
         TargetPointer enclosingMT = ((IRuntimeTypeSystem)this).GetMTOfEnclosingClass(fieldDescPointer);
         TypeHandle ctx = GetTypeHandle(enclosingMT);
         TargetPointer modulePtr = GetModule(ctx);
@@ -1775,7 +1774,12 @@ internal partial struct RuntimeTypeSystem_1 : IRuntimeTypeSystem
             @base = GetNonGCStaticsBasePointer(ctx);
         }
 
-        uint offset = ((IRuntimeTypeSystem)this).GetFieldDescOffset(fieldDescPointer, default);
+        MetadataReader mdReader = _target.Contracts.EcmaMetadata.GetMetadata(moduleHandle)!;
+        uint token = ((IRuntimeTypeSystem)this).GetFieldDescMemberDef(fieldDescPointer);
+        FieldDefinitionHandle fieldHandle = (FieldDefinitionHandle)MetadataTokens.Handle((int)token);
+        FieldDefinition fieldDef = mdReader.GetFieldDefinition(fieldHandle);
+
+        uint offset = ((IRuntimeTypeSystem)this).GetFieldDescOffset(fieldDescPointer, fieldDef);
         bool isRVA = IsFieldDescRVA(fieldDescPointer);
         TargetPointer handleAddr = GetStaticAddressHandle(@base, offset, isRVA, fieldDescPointer, moduleHandle);
         if (type == CorElementType.ValueType && !isRVA)
