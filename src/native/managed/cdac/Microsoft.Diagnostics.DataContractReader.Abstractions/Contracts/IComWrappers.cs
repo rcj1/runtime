@@ -14,6 +14,7 @@ public interface IComWrappers : IContract
     long GetMOWReferenceCount(TargetPointer mow) => throw new NotImplementedException();
     TargetPointer GetIdentityForMOW(TargetPointer mow) => throw new NotImplementedException();
     bool IsComWrappersRCW(TargetPointer rcw) => throw new NotImplementedException();
+    TargetPointer GetComWrappersRCWForObject(TargetPointer obj) => throw new NotImplementedException();
     IEnumerable<TargetPointer> GetMOWs(TargetPointer obj) => throw new NotImplementedException();
 }
 
