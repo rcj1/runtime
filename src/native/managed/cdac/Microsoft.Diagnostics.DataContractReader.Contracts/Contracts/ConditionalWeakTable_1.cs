@@ -12,13 +12,14 @@ internal readonly struct ConditionalWeakTable_1 : IConditionalWeakTable
         _target = target;
     }
 
-    TargetPointer IConditionalWeakTable.TryGetValue(TargetPointer conditionalWeakTable, TargetPointer key)
+    bool IConditionalWeakTable.TryGetValue(TargetPointer conditionalWeakTable, TargetPointer key, out TargetPointer value)
     {
+        value = TargetPointer.Null;
         Data.ConditionalWeakTable cwt = _target.ProcessedData.GetOrAdd<Data.ConditionalWeakTable>(conditionalWeakTable);
 
         int hashCode = _target.Contracts.Object.TryGetHashCode(key);
         if (hashCode == 0)
-            return TargetPointer.Null;
+            return false;
 
         hashCode &= int.MaxValue;
 
@@ -46,13 +47,14 @@ internal readonly struct ConditionalWeakTable_1 : IConditionalWeakTable
                 {
                     TargetNUInt extraInfo = _target.Contracts.GC.GetHandleExtraInfo(entry.DepHnd);
 
-                    return new TargetPointer(extraInfo.Value);
+                    value = new TargetPointer(extraInfo.Value);
+                    return true;
                 }
             }
 
             entriesIndex = entry.Next;
         }
 
-        return TargetPointer.Null;
+        return false;
     }
 }

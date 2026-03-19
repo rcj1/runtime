@@ -8,7 +8,7 @@ namespace Microsoft.Diagnostics.DataContractReader.Contracts;
 public interface IConditionalWeakTable : IContract
 {
     static string IContract.Name { get; } = nameof(ConditionalWeakTable);
-    TargetPointer TryGetValue(TargetPointer conditionalWeakTable, TargetPointer key) => throw new NotImplementedException();
+    bool TryGetValue(TargetPointer conditionalWeakTable, TargetPointer key, out TargetPointer value) => throw new NotImplementedException();
 }
 
 public readonly struct ConditionalWeakTable : IConditionalWeakTable

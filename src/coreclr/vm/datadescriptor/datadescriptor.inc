@@ -212,6 +212,7 @@ CDAC_TYPE_END(NativeObjectWrapperObject)
 CDAC_TYPE_BEGIN(ManagedObjectWrapperHolderObject)
 CDAC_TYPE_INDETERMINATE(ManagedObjectWrapperHolderObject)
 CDAC_TYPE_FIELD(ManagedObjectWrapperHolderObject, /*pointer*/, WrappedObject, cdac_data<ManagedObjectWrapperHolderObject>::WrappedObject)
+CDAC_TYPE_FIELD(ManagedObjectWrapperHolderObject, /*pointer*/, Wrapper, cdac_data<ManagedObjectWrapperHolderObject>::Wrapper)
 CDAC_TYPE_END(ManagedObjectWrapperHolderObject)
 
 CDAC_TYPE_BEGIN(ManagedObjectWrapperLayout)
