@@ -218,7 +218,21 @@ CDAC_TYPE_END(ManagedObjectWrapperHolderObject)
 CDAC_TYPE_BEGIN(ManagedObjectWrapperLayout)
 CDAC_TYPE_INDETERMINATE(ManagedObjectWrapperLayout)
 CDAC_TYPE_FIELD(ManagedObjectWrapperLayout, /*int64*/, RefCount, cdac_data<InteropLib::ABI::ManagedObjectWrapperLayout>::RefCount)
+CDAC_TYPE_FIELD(ManagedObjectWrapperLayout, /*int32*/, Flags, cdac_data<InteropLib::ABI::ManagedObjectWrapperLayout>::Flags)
+CDAC_TYPE_FIELD(ManagedObjectWrapperLayout, /*int32*/, UserDefinedCount, cdac_data<InteropLib::ABI::ManagedObjectWrapperLayout>::UserDefinedCount)
+CDAC_TYPE_FIELD(ManagedObjectWrapperLayout, /*pointer*/, UserDefined, cdac_data<InteropLib::ABI::ManagedObjectWrapperLayout>::UserDefined)
+CDAC_TYPE_FIELD(ManagedObjectWrapperLayout, /*pointer*/, Dispatches, cdac_data<InteropLib::ABI::ManagedObjectWrapperLayout>::Dispatches)
 CDAC_TYPE_END(ManagedObjectWrapperLayout)
+
+CDAC_TYPE_BEGIN(ComInterfaceEntry)
+CDAC_TYPE_SIZE(sizeof(InteropLib::ABI::ComInterfaceEntry))
+CDAC_TYPE_FIELD(ComInterfaceEntry, /*nuint*/, IID, cdac_data<InteropLib::ABI::ComInterfaceEntry>::IID)
+CDAC_TYPE_END(ComInterfaceEntry)
+
+CDAC_TYPE_BEGIN(InternalComInterfaceDispatch)
+CDAC_TYPE_SIZE(sizeof(InteropLib::ABI::InternalComInterfaceDispatch))
+CDAC_TYPE_FIELD(InternalComInterfaceDispatch, /*pointer*/, Entries, cdac_data<InteropLib::ABI::InternalComInterfaceDispatch>::Entries)
+CDAC_TYPE_END(InternalComInterfaceDispatch)
 #endif // FEATURE_COMWRAPPERS
 
 CDAC_TYPE_BEGIN(SyncTableEntry)

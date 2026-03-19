@@ -77,6 +77,46 @@ internal readonly struct ComWrappers_1 : IComWrappers
         return layout.RefCount;
     }
 
+    private static readonly Guid IID_IUnknown = new Guid("00000000-0000-0000-C000-000000000046");
+    private const int CallerDefinedIUnknown = 1;
+
+    private TargetPointer IndexIntoDispatchSection(int index, TargetPointer dispatches)
+    {
+        Target.TypeInfo dispatchTypeInfo = _target.GetTypeInfo(DataType.InternalComInterfaceDispatch);
+        uint dispatchSize = dispatchTypeInfo.Size!.Value;
+        uint entriesPerThisPtr = (dispatchSize / (uint)_target.PointerSize) - 1;
+
+        TargetPointer dispatchAddress = dispatches + (ulong)((uint)(index / (int)entriesPerThisPtr) * dispatchSize);
+        Data.InternalComInterfaceDispatch dispatch = _target.ProcessedData.GetOrAdd<Data.InternalComInterfaceDispatch>(dispatchAddress);
+
+        return dispatch.Entries + (ulong)((uint)(index % (int)entriesPerThisPtr) * (uint)_target.PointerSize);
+    }
+
+    public TargetPointer GetIdentityForMOW(TargetPointer mow)
+    {
+        Data.ManagedObjectWrapperLayout layout = _target.ProcessedData.GetOrAdd<Data.ManagedObjectWrapperLayout>(mow);
+
+        if ((layout.Flags & CallerDefinedIUnknown) == 0)
+        {
+            return IndexIntoDispatchSection(layout.UserDefinedCount, layout.Dispatches);
+        }
+
+        Target.TypeInfo entryTypeInfo = _target.GetTypeInfo(DataType.ComInterfaceEntry);
+        uint entrySize = entryTypeInfo.Size!.Value;
+
+        for (int i = 0; i < layout.UserDefinedCount; i++)
+        {
+            TargetPointer entryAddress = layout.UserDefined + (ulong)((uint)i * entrySize);
+            Data.ComInterfaceEntry entry = _target.ProcessedData.GetOrAdd<Data.ComInterfaceEntry>(entryAddress);
+            if (entry.IID == IID_IUnknown)
+            {
+                return IndexIntoDispatchSection(i, layout.Dispatches);
+            }
+        }
+
+        return TargetPointer.Null;
+    }
+
     public bool IsComWrappersRCW(TargetPointer rcw)
     {
         TargetPointer mt = _target.Contracts.Object.GetMethodTableAddress(rcw);

@@ -159,6 +159,8 @@ public enum DataType
     RCW,
     CtxEntry,
     InterfaceEntry,
+    ComInterfaceEntry,
+    InternalComInterfaceDispatch,
 
 
     /* GC Data Types */
