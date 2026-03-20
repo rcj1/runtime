@@ -152,36 +152,33 @@ internal readonly struct ComWrappers_1 : IComWrappers
     public TargetPointer GetComWrappersRCWForObject(TargetPointer obj)
     {
         GetSPCFieldDescAndDef(ComWrappersNamespace, ComWrappersName, NativeObjectWrapperCWTFieldName, out TargetPointer fieldDescAddr, out _);
-        TargetPointer cwtContainerAddr = _target.ReadPointer(_target.Contracts.RuntimeTypeSystem.GetFieldDescStaticAddress(fieldDescAddr));
-        TargetPointer cwtTable = _target.ProcessedData.GetOrAdd<Data.ConditionalWeakTableContainer>(cwtContainerAddr).Container;
-        if (cwtTable == TargetPointer.Null)
-            return TargetPointer.Null;
+        TargetPointer cwtAddr = _target.ReadPointer(_target.Contracts.RuntimeTypeSystem.GetFieldDescStaticAddress(fieldDescAddr));
         IConditionalWeakTable cwt = _target.Contracts.ConditionalWeakTable;
-        _ = cwt.TryGetValue(cwtTable, obj, out TargetPointer rcw);
+        _ = cwt.TryGetValue(cwtAddr, obj, out TargetPointer rcw);
         return rcw;
     }
 
-    public List<TargetPointer> GetMOWs(TargetPointer obj)
+    public List<TargetPointer> GetMOWs(TargetPointer obj, out bool hasMOWTable)
     {
+        hasMOWTable = false;
         IRuntimeTypeSystem rts = _target.Contracts.RuntimeTypeSystem;
         GetSPCFieldDescAndDef(ComWrappersNamespace, ComWrappersName, AllManagedObjectWrapperTableFieldName, out TargetPointer fieldDescAddr, out _);
         TargetPointer MOWTableAddr = _target.ReadPointer(rts.GetFieldDescStaticAddress(fieldDescAddr));
-        TargetPointer MOWTable = _target.ProcessedData.GetOrAdd<Data.ConditionalWeakTableContainer>(MOWTableAddr).Container;
-        if (MOWTable == TargetPointer.Null)
-            return [];
 
         List<TargetPointer> mows = new List<TargetPointer>();
 
         IConditionalWeakTable cwt = _target.Contracts.ConditionalWeakTable;
-        if (cwt.TryGetValue(MOWTable, obj, out TargetPointer mowListObj))
+        if (cwt.TryGetValue(MOWTableAddr, obj, out TargetPointer mowListObj))
         {
+            hasMOWTable = true;
+            Data.Object listObj = _target.ProcessedData.GetOrAdd<Data.Object>(mowListObj);
             GetSPCFieldDescAndDef(ListNamespace, ListName, ListItemsFieldName, out TargetPointer itemsFieldDescAddr, out FieldDefinition itemsFieldDef);
             uint offset = rts.GetFieldDescOffset(itemsFieldDescAddr, itemsFieldDef);
-            TargetPointer listItemsPtr = _target.ReadPointer(mowListObj + offset);
+            TargetPointer listItemsPtr = _target.ReadPointer(listObj.Data + offset);
 
             GetSPCFieldDescAndDef(ListNamespace, ListName, ListSizeFieldName, out TargetPointer sizeFieldDescAddr, out FieldDefinition sizeFieldDef);
             uint sizeOffset = rts.GetFieldDescOffset(sizeFieldDescAddr, sizeFieldDef);
-            int size = _target.Read<int>(mowListObj + sizeOffset);
+            int size = _target.Read<int>(listObj.Data + sizeOffset);
 
             if (size > 0 && listItemsPtr != TargetPointer.Null)
             {
@@ -190,7 +187,7 @@ internal readonly struct ComWrappers_1 : IComWrappers
                 {
                     TargetPointer mow = _target.ReadPointer(listItemsArray.DataPointer + (ulong)(i * _target.PointerSize));
                     Data.ManagedObjectWrapperHolderObject mowHolderObject = _target.ProcessedData.GetOrAdd<Data.ManagedObjectWrapperHolderObject>(mow);
-                    mows.Add(mowHolderObject.WrappedObject);
+                    mows.Add(mowHolderObject.Wrapper);
                 }
             }
         }

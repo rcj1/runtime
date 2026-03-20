@@ -16,7 +16,7 @@ public interface IComWrappers : IContract
     TargetPointer GetIdentityForMOW(TargetPointer mow) => throw new NotImplementedException();
     bool IsComWrappersRCW(TargetPointer rcw) => throw new NotImplementedException();
     TargetPointer GetComWrappersRCWForObject(TargetPointer obj) => throw new NotImplementedException();
-    List<TargetPointer> GetMOWs(TargetPointer obj) => throw new NotImplementedException();
+    List<TargetPointer> GetMOWs(TargetPointer obj, out bool hasMOWTable) => throw new NotImplementedException();
 }
 
 public readonly struct ComWrappers : IComWrappers

@@ -60,6 +60,7 @@ struct cdac_data<ConditionalWeakTableContainerObject>
 class ConditionalWeakTableObject final : public Object
 {
     friend class CoreLibBinder;
+    friend struct ::cdac_data<ConditionalWeakTableObject>;
     OBJECTREF _lock;
     VolatilePtr<ConditionalWeakTableContainerObject, CONDITIONAL_WEAK_TABLE_CONTAINER_REF> _container;
 public:
@@ -86,4 +87,9 @@ public:
 #endif
 };
 
+template<>
+struct cdac_data<ConditionalWeakTableObject>
+{
+    static constexpr size_t Container = offsetof(ConditionalWeakTableObject, _container);
+};
 #endif // CONDITIONAL_WEAK_TABLE_H
