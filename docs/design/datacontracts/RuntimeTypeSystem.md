@@ -51,6 +51,8 @@ partial interface IRuntimeTypeSystem : IContract
 
     // True if the MethodTable is the sentinel value associated with unallocated space in the managed heap
     public virtual bool IsFreeObjectMethodTable(TypeHandle typeHandle);
+    // True if the MethodTable is the MethodTable for System.Object
+    public virtual bool IsObject(TypeHandle typeHandle);
     public virtual bool IsString(TypeHandle typeHandle);
     // True if the MethodTable represents a type that contains managed references
     public virtual bool ContainsGCPointers(TypeHandle typeHandle);
@@ -78,6 +80,7 @@ partial interface IRuntimeTypeSystem : IContract
     public bool IsClassInited(TypeHandle typeHandle);
     public bool IsInitError(TypeHandle typeHandle);
     public virtual bool IsGenericTypeDefinition(TypeHandle typeHandle);
+    public virtual bool ContainsGenericVariables(TypeHandle typeHandle);
 
     public virtual bool IsCollectible(TypeHandle typeHandle);
     public virtual bool HasTypeParam(TypeHandle typeHandle);
@@ -91,6 +94,8 @@ partial interface IRuntimeTypeSystem : IContract
     bool IsEnum(TypeHandle typeHandle);
     // return true if the TypeHandle represents an array, and set the rank to either 0 (if the type is not an array), or the rank number if it is.
     bool IsArray(TypeHandle typeHandle, out uint rank);
+    // return true if the TypeHandle represents a multi-dimensional array (ELEMENT_TYPE_ARRAY, not SZARRAY)
+    bool IsMultiDimArray(TypeHandle typeHandle);
     TypeHandle GetTypeParam(TypeHandle typeHandle);
     TypeHandle GetConstructedType(TypeHandle typeHandle, CorElementType corElementType, int rank, ImmutableArray<TypeHandle> typeArguments);
     TypeHandle GetPrimitiveType(CorElementType typeCode);
@@ -226,6 +231,8 @@ bool IsFieldDescThreadStatic(TargetPointer fieldDescPointer);
 bool IsFieldDescStatic(TargetPointer fieldDescPointer);
 uint GetFieldDescType(TargetPointer fieldDescPointer);
 uint GetFieldDescOffset(TargetPointer fieldDescPointer, FieldDefinition fieldDef);
+TargetPointer GetFieldDescStaticAddress(TargetPointer fieldDescPointer);
+TargetPointer GetFieldDescThreadStaticAddress(TargetPointer fieldDescPointer, TargetPointer thread);
 ```
 
 ### Other APIs
@@ -271,6 +278,7 @@ internal partial struct RuntimeTypeSystem_1
         Category_Interface = 0x000C0000,
         Collectible = 0x00200000,
         ContainsGCPointers = 0x01000000,
+        ContainsGenericVariables = 0x20000000,
         HasComponentSize = 0x80000000, // This is set if lower 16 bits is used for the component size,
                                        // otherwise the lower bits are used for WFLAGS_LOW
     }
@@ -318,6 +326,7 @@ internal partial struct RuntimeTypeSystem_1
         public bool IsCollectible => GetFlag(WFLAGS_HIGH.Collectible) != 0;
         public bool IsDynamicStatics => GetFlag(WFLAGS2_ENUM.DynamicStatics) != 0;
         public bool IsGenericTypeDefinition => TestFlagWithMask(WFLAGS_LOW.GenericsMask, WFLAGS_LOW.GenericsMask_TypicalInstantiation);
+        public bool ContainsGenericVariables => GetFlag(WFLAGS_HIGH.ContainsGenericVariables) != 0;
     }
 
     [Flags]
@@ -532,6 +541,8 @@ Contracts used:
 
     public bool IsFreeObjectMethodTable(TypeHandle TypeHandle) => FreeObjectMethodTablePointer == TypeHandle.Address;
 
+    public bool IsObject(TypeHandle TypeHandle) => TypeHandle.IsMethodTable() && ObjectMethodTablePointer == TypeHandle.Address;
+
     public bool IsString(TypeHandle TypeHandle) => !typeHandle.IsMethodTable() ? false : _methodTables[TypeHandle.Address].Flags.IsString;
 
     public bool ContainsGCPointers(TypeHandle TypeHandle) => !typeHandle.IsMethodTable() ? false : _methodTables[TypeHandle.Address].Flags.ContainsGCPointers;
@@ -677,6 +688,14 @@ Contracts used:
         return typeHandle.Flags.IsCollectible;
     }
 
+    public bool ContainsGenericVariables(TypeHandle typeHandle)
+    {
+        if (typeHandle.IsMethodTable())
+            return _methodTables[typeHandle.Address].Flags.ContainsGenericVariables;
+        // For TypeDescs: Var/MVar are generic variables; for parameterized types (Ptr, ByRef),
+        // recurse through GetTypeParam; for FnPtr, check each signature type argument.
+    }
+
     public bool HasTypeParam(TypeHandle typeHandle)
     {
         if (typeHandle.IsMethodTable())
@@ -767,6 +786,16 @@ Contracts used:
         }
 
         rank = 0;
+        return false;
+    }
+
+    public bool IsMultiDimArray(TypeHandle typeHandle)
+    {
+        if (typeHandle.IsMethodTable())
+        {
+            return _methodTables[typeHandle.Address].Flags.GetFlag(WFLAGS_HIGH.Category_Mask)
+                == WFLAGS_HIGH.Category_Array;
+        }
         return false;
     }
 
@@ -1812,6 +1841,19 @@ uint GetFieldDescOffset(TargetPointer fieldDescPointer)
         return (uint)fieldDef.GetRelativeVirtualAddress();
     }
     return DWord2 & (uint)FieldDescFlags2.OffsetMask;
+}
+
+TargetPointer GetFieldDescStaticAddress(TargetPointer fieldDescPointer)
+{
+    // Resolves the base pointer (GC or non-GC statics) for the enclosing type,
+    // then applies the field's metadata-based offset within that region.
+    // Uses GetGCStaticsBasePointer / GetNonGCStaticsBasePointer depending on the field's CorElementType.
+}
+
+TargetPointer GetFieldDescThreadStaticAddress(TargetPointer fieldDescPointer, TargetPointer thread)
+{
+    // Like GetFieldDescStaticAddress, but resolves thread-local base pointers instead.
+    // Uses GetGCThreadStaticsBasePointer / GetNonGCThreadStaticsBasePointer.
 }
 ```
 

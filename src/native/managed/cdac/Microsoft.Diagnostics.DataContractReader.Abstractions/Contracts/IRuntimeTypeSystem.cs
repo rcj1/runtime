@@ -114,6 +114,7 @@ public interface IRuntimeTypeSystem : IContract
 
     // True if the MethodTable is the sentinel value associated with unallocated space in the managed heap
     bool IsFreeObjectMethodTable(TypeHandle typeHandle) => throw new NotImplementedException();
+    bool IsObject(TypeHandle typeHandle) => throw new NotImplementedException();
     bool IsString(TypeHandle typeHandle) => throw new NotImplementedException();
     // True if the MethodTable represents a type that contains managed references
     bool ContainsGCPointers(TypeHandle typeHandle) => throw new NotImplementedException();
@@ -143,6 +144,7 @@ public interface IRuntimeTypeSystem : IContract
     public bool IsClassInited(TypeHandle typeHandle) => throw new NotImplementedException();
     public bool IsInitError(TypeHandle typeHandle) => throw new NotImplementedException();
     bool IsGenericTypeDefinition(TypeHandle typeHandle) => throw new NotImplementedException();
+    bool ContainsGenericVariables(TypeHandle typeHandle) => throw new NotImplementedException();
     bool IsCollectible(TypeHandle typeHandle) => throw new NotImplementedException();
 
     bool HasTypeParam(TypeHandle typeHandle) => throw new NotImplementedException();
@@ -157,6 +159,8 @@ public interface IRuntimeTypeSystem : IContract
 
     // return true if the TypeHandle represents an array, and set the rank to either 0 (if the type is not an array), or the rank number if it is.
     bool IsArray(TypeHandle typeHandle, out uint rank) => throw new NotImplementedException();
+    // return true if the TypeHandle represents a multi-dimensional array (ELEMENT_TYPE_ARRAY, not SZARRAY)
+    bool IsMultiDimArray(TypeHandle typeHandle) => throw new NotImplementedException();
     TypeHandle GetTypeParam(TypeHandle typeHandle) => throw new NotImplementedException();
     TypeHandle GetConstructedType(TypeHandle typeHandle, CorElementType corElementType, int rank, ImmutableArray<TypeHandle> typeArguments) => throw new NotImplementedException();
     TypeHandle GetPrimitiveType(CorElementType typeCode) => throw new NotImplementedException();
@@ -232,6 +236,7 @@ public interface IRuntimeTypeSystem : IContract
     uint GetFieldDescOffset(TargetPointer fieldDescPointer, FieldDefinition fieldDef) => throw new NotImplementedException();
     TargetPointer GetFieldDescByName(TypeHandle typeHandle, string fieldName) => throw new NotImplementedException();
     TargetPointer GetFieldDescStaticAddress(TargetPointer fieldDescPointer) => throw new NotImplementedException();
+    TargetPointer GetFieldDescThreadStaticAddress(TargetPointer fieldDescPointer, TargetPointer thread) => throw new NotImplementedException();
     #endregion FieldDesc inspection APIs
     #region Other APIs
     void GetCoreLibFieldDescAndDef(string typeNamespace, string typeName, string fieldName, out TargetPointer fieldDescAddr, out FieldDefinition fieldDef) => throw new NotImplementedException();

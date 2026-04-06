@@ -80,8 +80,8 @@ internal partial class MockDescriptors
         DataType = DataType.String,
         Fields =
         [
-            new("m_StringLength", DataType.uint32),
-            new("m_FirstChar", DataType.uint16),
+            new("StringLength", DataType.uint32),
+            new("BufferOffset", DataType.uint16),
         ],
         BaseTypeFields = ObjectFields
     };

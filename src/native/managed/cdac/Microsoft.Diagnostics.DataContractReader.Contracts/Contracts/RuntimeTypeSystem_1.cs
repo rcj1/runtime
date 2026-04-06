@@ -18,6 +18,7 @@ internal partial struct RuntimeTypeSystem_1 : IRuntimeTypeSystem
     private const int TYPE_MASK_OFFSET = 27; // offset of type in field desc flags2
     private readonly Target _target;
     private readonly TargetPointer _freeObjectMethodTablePointer;
+    private readonly TargetPointer _objectMethodTablePointer;
     private readonly TargetPointer _continuationMethodTablePointer;
     private readonly ulong _methodDescAlignment;
     private readonly TypeValidation _typeValidation;
@@ -417,10 +418,11 @@ internal partial struct RuntimeTypeSystem_1 : IRuntimeTypeSystem
         }
     }
 
-    internal RuntimeTypeSystem_1(Target target, TypeValidation typeValidation, MethodValidation methodValidation, TargetPointer freeObjectMethodTablePointer, TargetPointer continuationMethodTablePointer, ulong methodDescAlignment)
+    internal RuntimeTypeSystem_1(Target target, TypeValidation typeValidation, MethodValidation methodValidation, TargetPointer freeObjectMethodTablePointer, TargetPointer objectMethodTablePointer, TargetPointer continuationMethodTablePointer, ulong methodDescAlignment)
     {
         _target = target;
         _freeObjectMethodTablePointer = freeObjectMethodTablePointer;
+        _objectMethodTablePointer = objectMethodTablePointer;
         _continuationMethodTablePointer = continuationMethodTablePointer;
         _methodDescAlignment = methodDescAlignment;
         _typeValidation = typeValidation;
@@ -547,7 +549,10 @@ internal partial struct RuntimeTypeSystem_1 : IRuntimeTypeSystem
 
     public bool IsFreeObjectMethodTable(TypeHandle typeHandle) => FreeObjectMethodTablePointer == typeHandle.Address;
 
+    public bool IsObject(TypeHandle typeHandle) => typeHandle.IsMethodTable() && _objectMethodTablePointer == typeHandle.Address;
+
     public bool IsString(TypeHandle typeHandle) => !typeHandle.IsMethodTable() ? false : _methodTables[typeHandle.Address].Flags.IsString;
+
     public bool ContainsGCPointers(TypeHandle typeHandle) => !typeHandle.IsMethodTable() ? false : _methodTables[typeHandle.Address].Flags.ContainsGCPointers;
     public bool IsContinuation(TypeHandle typeHandle) => typeHandle.IsMethodTable()
         && _continuationMethodTablePointer != TargetPointer.Null
@@ -693,6 +698,34 @@ internal partial struct RuntimeTypeSystem_1 : IRuntimeTypeSystem
     }
 
     public bool IsGenericTypeDefinition(TypeHandle typeHandle) => !typeHandle.IsMethodTable() ? false : _methodTables[typeHandle.Address].Flags.IsGenericTypeDefinition;
+    public bool ContainsGenericVariables(TypeHandle typeHandle)
+    {
+        if (typeHandle.IsTypeDesc())
+        {
+            CorElementType type = GetSignatureCorElementType(typeHandle);
+            if (type == CorElementType.Var || type == CorElementType.MVar)
+                return true;
+
+            else if (HasTypeParam(typeHandle))
+            {
+                return ContainsGenericVariables(GetRootTypeParam(typeHandle));
+            }
+
+            else if (type == CorElementType.FnPtr)
+            {
+                _ = IsFunctionPointer(typeHandle, out ReadOnlySpan<TypeHandle> signatureTypeArgs, out _);
+                foreach (TypeHandle sigTypeArg in signatureTypeArgs)
+                {
+                    if (ContainsGenericVariables(sigTypeArg))
+                        return true;
+                }
+            }
+
+            return false;
+        }
+        return _methodTables[typeHandle.Address].Flags.ContainsGenericVariables;
+    }
+
     public bool IsCollectible(TypeHandle typeHandle) => !typeHandle.IsMethodTable() ? false : _methodTables[typeHandle.Address].Flags.IsCollectible;
     public bool HasTypeParam(TypeHandle typeHandle)
     {
@@ -789,6 +822,18 @@ internal partial struct RuntimeTypeSystem_1 : IRuntimeTypeSystem
         return false;
     }
 
+    bool IRuntimeTypeSystem.IsMultiDimArray(TypeHandle typeHandle)
+    {
+        if (typeHandle.IsMethodTable())
+        {
+            MethodTable methodTable = _methodTables[typeHandle.Address];
+            return methodTable.Flags.GetFlag(MethodTableFlags_1.WFLAGS_HIGH.Category_Mask)
+                == MethodTableFlags_1.WFLAGS_HIGH.Category_Array;
+        }
+
+        return false;
+    }
+
     public TypeHandle GetTypeParam(TypeHandle typeHandle)
     {
         if (typeHandle.IsMethodTable())
@@ -813,6 +858,16 @@ internal partial struct RuntimeTypeSystem_1 : IRuntimeTypeSystem
             }
         }
         throw new ArgumentException(nameof(typeHandle));
+    }
+
+    private TypeHandle GetRootTypeParam(TypeHandle typeHandle)
+    {
+        TypeHandle current = typeHandle;
+        while (HasTypeParam(current))
+        {
+            current = GetTypeParam(current);
+        }
+        return current;
     }
 
     private bool GenericInstantiationMatch(TypeHandle genericType, TypeHandle potentialMatch, ImmutableArray<TypeHandle> typeArguments)
@@ -1822,7 +1877,7 @@ internal partial struct RuntimeTypeSystem_1 : IRuntimeTypeSystem
         return new TargetPointer(@base + offset);
     }
 
-    TargetPointer IRuntimeTypeSystem.GetFieldDescStaticAddress(TargetPointer fieldDescPointer)
+    private TargetPointer GetFieldDescStaticOrThreadStaticAddress(TargetPointer fieldDescPointer, TargetPointer? thread = null)
     {
         TargetPointer enclosingMT = ((IRuntimeTypeSystem)this).GetMTOfEnclosingClass(fieldDescPointer);
         TypeHandle ctx = GetTypeHandle(enclosingMT);
@@ -1833,11 +1888,25 @@ internal partial struct RuntimeTypeSystem_1 : IRuntimeTypeSystem
         TargetPointer @base;
         if (type == CorElementType.Class || type == CorElementType.ValueType)
         {
-            @base = GetGCStaticsBasePointer(ctx);
+            if (thread.HasValue)
+            {
+                @base = GetGCThreadStaticsBasePointer(ctx, thread.Value);
+            }
+            else
+            {
+                @base = GetGCStaticsBasePointer(ctx);
+            }
         }
         else
         {
-            @base = GetNonGCStaticsBasePointer(ctx);
+            if (thread.HasValue)
+            {
+                @base = GetNonGCThreadStaticsBasePointer(ctx, thread.Value);
+            }
+            else
+            {
+                @base = GetNonGCStaticsBasePointer(ctx);
+            }
         }
 
         MetadataReader mdReader = _target.Contracts.EcmaMetadata.GetMetadata(moduleHandle)!;
@@ -1856,6 +1925,10 @@ internal partial struct RuntimeTypeSystem_1 : IRuntimeTypeSystem
         }
         return handleAddr;
     }
+
+    TargetPointer IRuntimeTypeSystem.GetFieldDescStaticAddress(TargetPointer fieldDescPointer) => GetFieldDescStaticOrThreadStaticAddress(fieldDescPointer);
+
+    TargetPointer IRuntimeTypeSystem.GetFieldDescThreadStaticAddress(TargetPointer fieldDescPointer, TargetPointer thread) => GetFieldDescStaticOrThreadStaticAddress(fieldDescPointer, thread);
 
     void IRuntimeTypeSystem.GetCoreLibFieldDescAndDef(string @namespace, string typeName, string fieldName, out TargetPointer fieldDescAddr, out FieldDefinition fieldDef)
     {

@@ -23,6 +23,7 @@ internal sealed class Module : IData<Module>
         SimpleName = target.ReadPointer(address + (ulong)type.Fields[nameof(SimpleName)].Offset);
         Path = target.ReadPointer(address + (ulong)type.Fields[nameof(Path)].Offset);
         FileName = target.ReadPointer(address + (ulong)type.Fields[nameof(FileName)].Offset);
+        DomainAssembly = target.ReadPointer(address + (ulong)type.Fields[nameof(DomainAssembly)].Offset);
         ReadyToRunInfo = target.ReadPointer(address + (ulong)type.Fields[nameof(ReadyToRunInfo)].Offset);
         GrowableSymbolStream = target.ReadPointer(address + (ulong)type.Fields[nameof(GrowableSymbolStream)].Offset);
         AvailableTypeParams = target.ReadPointer(address + (ulong)type.Fields[nameof(AvailableTypeParams)].Offset);
@@ -39,6 +40,7 @@ internal sealed class Module : IData<Module>
     }
 
     public TargetPointer Assembly { get; init; }
+    public TargetPointer DomainAssembly { get; init; }
     public TargetPointer PEAssembly { get; init; }
     public uint Flags { get; init; }
     public TargetPointer Base { get; init; }

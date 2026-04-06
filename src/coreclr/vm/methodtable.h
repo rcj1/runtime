@@ -3816,7 +3816,7 @@ private:
 
         enum_flag_IDynamicInterfaceCastable   = 0x10000000, // class implements IDynamicInterfaceCastable interface
         enum_flag_ContainsGenericVariables    = 0x20000000, // we cache this flag to help detect these efficiently and
-                                                            // to detect this condition when restoring
+                                                            // to detect this condition when restoring. [cDAC] [RuntimeTypeSystem]: Contract depends on this value
         enum_flag_ComObject                   = 0x40000000, // class is a com object
         enum_flag_HasComponentSize            = 0x80000000, // This is set if component size is used for flags. [cDAC] [RuntimeTypeSystem]: Contract depends on this value
 

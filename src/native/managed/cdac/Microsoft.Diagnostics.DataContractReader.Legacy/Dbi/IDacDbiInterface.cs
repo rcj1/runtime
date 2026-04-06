@@ -138,6 +138,99 @@ public struct COR_FIELD
 
 #pragma warning restore CS0649
 
+// Mirrors native DebuggerIPCE_BasicTypeData (dbgipcevents.h).
+// Used as a sub-element of the ExpandedTypeData union members.
+[StructLayout(LayoutKind.Sequential)]
+public struct DebuggerIPCE_BasicTypeData
+{
+    public int elementType;
+    public uint metadataToken;
+    public ulong vmModule;
+    public ulong vmDomainAssembly;
+    public ulong vmTypeHandle;
+}
+
+// Mirrors native DebuggerIPCE_ExpandedTypeData (dbgipcevents.h).
+// Uses explicit layout because the native struct contains a union.
+[StructLayout(LayoutKind.Explicit)]
+public struct DebuggerIPCE_ExpandedTypeData
+{
+    // CorElementType (never E_T_VAR, E_T_WITH, or E_T_MVAR)
+    [FieldOffset(0)]
+    public int elementType;
+
+    // --- ClassTypeData (E_T_CLASS, E_T_VALUETYPE) ---
+    [FieldOffset(8)]
+    public uint ClassTypeData_metadataToken;
+    [FieldOffset(16)]
+    public ulong ClassTypeData_vmModule;
+    [FieldOffset(24)]
+    public ulong ClassTypeData_vmDomainAssembly;
+    [FieldOffset(32)]
+    public ulong ClassTypeData_typeHandle;
+
+    // --- UnaryTypeData (E_T_PTR, E_T_BYREF) ---
+    [FieldOffset(8)]
+    public DebuggerIPCE_BasicTypeData UnaryTypeData_unaryTypeArg;
+
+    // --- ArrayTypeData (E_T_ARRAY, E_T_SZARRAY) ---
+    [FieldOffset(8)]
+    public DebuggerIPCE_BasicTypeData ArrayTypeData_arrayTypeArg;
+    [FieldOffset(40)]
+    public uint ArrayTypeData_arrayRank;
+
+    // --- NaryTypeData (E_T_FNPTR) ---
+    [FieldOffset(8)]
+    public ulong NaryTypeData_typeHandle;
+}
+
+// Mirrors native DebuggerIPCE_ObjectData (dbgipcevents.h).
+// Uses explicit layout because the native struct contains a union of stringInfo/arrayInfo/typedByrefInfo.
+[StructLayout(LayoutKind.Explicit)]
+public struct DebuggerIPCE_ObjectData
+{
+    [FieldOffset(0)]
+    public ulong objRef;
+    [FieldOffset(8)]
+    public byte objRefBad;      // native bool, 1 byte
+
+    [FieldOffset(16)]
+    public ulong objSize;       // SIZE_T
+    [FieldOffset(24)]
+    public ulong objOffsetToVars; // SIZE_T
+
+    [FieldOffset(32)]
+    public DebuggerIPCE_ExpandedTypeData objTypeData; // 48 bytes
+
+    // --- stringInfo union member ---
+    [FieldOffset(80)]
+    public ulong stringInfo_length;             // SIZE_T
+    [FieldOffset(88)]
+    public ulong stringInfo_offsetToStringBase; // SIZE_T
+
+    // --- arrayInfo union member ---
+    [FieldOffset(80)]
+    public ulong arrayInfo_rank;                // SIZE_T
+    [FieldOffset(88)]
+    public ulong arrayInfo_offsetToArrayBase;   // SIZE_T
+    [FieldOffset(96)]
+    public ulong arrayInfo_offsetToLowerBounds; // SIZE_T
+    [FieldOffset(104)]
+    public ulong arrayInfo_offsetToUpperBounds; // SIZE_T
+    [FieldOffset(112)]
+    public ulong arrayInfo_componentCount;      // SIZE_T
+    [FieldOffset(120)]
+    public ulong arrayInfo_elementSize;         // SIZE_T
+}
+
+// Mirrors native AreValueTypesBoxed enum (dacdbistructures.h).
+public enum AreValueTypesBoxed
+{
+    NoValueTypeBoxing = 0,
+    OnlyPrimitivesUnboxed = 1,
+    AllBoxed = 2,
+}
+
 // Name-surface projection of IDacDbiInterface in native method order for COM binding validation.
 // Parameter shapes are intentionally coarse placeholders and will be refined with method implementation work.
 [GeneratedComInterface]
@@ -376,7 +469,7 @@ public unsafe partial interface IDacDbiInterface
     int GetInstantiationFieldInfo(ulong vmDomainAssembly, ulong vmTypeHandle, ulong vmExactMethodTable, nint pFieldList, nuint* pObjectSize);
 
     [PreserveSig]
-    int TypeHandleToExpandedTypeInfo(int boxed, ulong vmAppDomain, ulong vmTypeHandle, nint pData);
+    int TypeHandleToExpandedTypeInfo(int boxed, ulong vmAppDomain, ulong vmTypeHandle, DebuggerIPCE_ExpandedTypeData* pData);
 
     [PreserveSig]
     int GetObjectExpandedTypeInfo(int boxed, ulong vmAppDomain, ulong addr, nint pTypeInfo);
@@ -436,10 +529,10 @@ public unsafe partial interface IDacDbiInterface
     int GetTypedByRefInfo(ulong pTypedByRef, ulong vmAppDomain, nint pObjectData);
 
     [PreserveSig]
-    int GetStringData(ulong objectAddress, nint pObjectData);
+    int GetStringData(ulong objectAddress, DebuggerIPCE_ObjectData* pObjectData);
 
     [PreserveSig]
-    int GetArrayData(ulong objectAddress, nint pObjectData);
+    int GetArrayData(ulong objectAddress, DebuggerIPCE_ObjectData* pObjectData);
 
     [PreserveSig]
     int GetBasicObjectInfo(ulong objectAddress, int type, ulong vmAppDomain, nint pObjectData);

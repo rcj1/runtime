@@ -12,10 +12,12 @@ internal sealed class String : IData<String>
     {
         Target.TypeInfo type = target.GetTypeInfo(DataType.String);
 
-        FirstChar = address + (ulong)type.Fields["m_FirstChar"].Offset;
-        StringLength = target.Read<uint>(address + (ulong)type.Fields["m_StringLength"].Offset);
+        BufferOffset = (uint)type.Fields[nameof(BufferOffset)].Offset;
+        FirstChar = address + BufferOffset;
+        StringLength = target.Read<uint>(address + (ulong)type.Fields[nameof(StringLength)].Offset);
     }
 
     public TargetPointer FirstChar { get; init; }
     public uint StringLength { get; init; }
+    public uint BufferOffset { get; init; }
 }

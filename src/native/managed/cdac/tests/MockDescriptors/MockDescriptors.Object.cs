@@ -196,8 +196,8 @@ internal partial class MockDescriptors
             MockMemorySpace.HeapFragment fragment = ManagedObjectAllocator.Allocate((uint)size, $"String = '{value}'");
             Span<byte> dest = fragment.Data;
             targetTestHelpers.WritePointer(dest.Slice(objectTypeInfo.Fields["m_pMethTab"].Offset), TestStringMethodTableAddress);
-            targetTestHelpers.Write(dest.Slice(stringTypeInfo.Fields["m_StringLength"].Offset), (uint)value.Length);
-            MemoryMarshal.Cast<char, byte>(value).CopyTo(dest.Slice(stringTypeInfo.Fields["m_FirstChar"].Offset));
+            targetTestHelpers.Write(dest.Slice(stringTypeInfo.Fields["StringLength"].Offset), (uint)value.Length);
+            MemoryMarshal.Cast<char, byte>(value).CopyTo(dest.Slice(stringTypeInfo.Fields["BufferOffset"].Offset));
             builder.AddHeapFragment(fragment);
             return fragment.Address;
         }

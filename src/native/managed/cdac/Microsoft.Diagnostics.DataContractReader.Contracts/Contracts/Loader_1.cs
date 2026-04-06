@@ -159,6 +159,12 @@ internal readonly struct Loader_1 : ILoader
         return module.Assembly;
     }
 
+    TargetPointer ILoader.GetDomainAssembly(ModuleHandle handle)
+    {
+        Data.Module module = _target.ProcessedData.GetOrAdd<Data.Module>(handle.Address);
+        return module.DomainAssembly;
+    }
+
     TargetPointer ILoader.GetPEAssembly(ModuleHandle handle)
     {
         Data.Module module = _target.ProcessedData.GetOrAdd<Data.Module>(handle.Address);

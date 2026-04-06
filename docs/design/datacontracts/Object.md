@@ -11,6 +11,9 @@ TargetPointer GetMethodTableAddress(TargetPointer address);
 // Get the string corresponding to a managed string object. Error if address does not represent a string.
 string GetStringValue(TargetPointer address);
 
+// Get the string length and buffer offset for a managed string object. Error if address does not represent a string.
+void GetStringData(TargetPointer address, out uint stringLength, out uint bufferOffset);
+
 // Get the pointer to the data corresponding to a managed array object. Error if address does not represent a array.
 TargetPointer GetArrayData(TargetPointer address, out uint count, out TargetPointer boundsStart, out TargetPointer lowerBounds);
 
@@ -29,8 +32,8 @@ Data descriptors used:
 | --- | --- | --- |
 | `Array` | `m_NumComponents` | Number of items in the array |
 | `Object` | `m_pMethTab` | Method table for the object |
-| `String` | `m_FirstChar` | First character of the string - `m_StringLength` can be used to read the full string (encoded in UTF-16) |
-| `String` | `m_StringLength` | Length of the string in characters (encoded in UTF-16) |
+| `String` | `BufferOffset` | Offset from the start of the string object to the character buffer |
+| `String` | `StringLength` | Length of the string in characters (encoded in UTF-16) |
 | `SyncTableEntry` | `SyncBlock` | `SyncBlock` corresponding to the entry |
 | `ObjectHeader` | `SyncBlockValue` | Sync block value from the object header |
 | `SyncBlock` | `HashCode` | Hash code stored in the sync block |
@@ -71,10 +74,23 @@ string GetStringValue(TargetPointer address)
     if (mt != stringMethodTable)
         throw new ArgumentException("Address does not represent a string object", nameof(address));
 
-    uint length = target.Read<uint>(address + /* String::m_StringLength offset */);
+    uint length = target.Read<uint>(address + /* String::StringLength offset */);
     Span<byte> span = stackalloc byte[(int)length * sizeof(char)];
-    target.ReadBuffer(address + /* String::m_FirstChar offset */, span);
+    target.ReadBuffer(address + /* String::BufferOffset offset */, span);
     return new string(MemoryMarshal.Cast<byte, char>(span));
+}
+
+void GetStringData(TargetPointer address, out uint stringLength, out uint bufferOffset)
+{
+    TargetPointer mt = GetMethodTableAddress(address);
+    if (mt == TargetPointer.Null)
+        throw new ArgumentException("Address represents a set-free object");
+    TargetPointer stringMethodTable = target.ReadPointer(target.ReadGlobalPointer("StringMethodTable"));
+    if (mt != stringMethodTable)
+        throw new ArgumentException("Address does not represent a string object", nameof(address));
+
+    stringLength = target.Read<uint>(address + /* String::StringLength offset */);
+    bufferOffset = /* String::BufferOffset field offset */;
 }
 
 TargetPointer GetArrayData(TargetPointer address, out uint count, out TargetPointer boundsStart, out TargetPointer lowerBounds)

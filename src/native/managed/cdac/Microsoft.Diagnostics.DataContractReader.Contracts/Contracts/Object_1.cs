@@ -58,6 +58,19 @@ internal readonly struct Object_1 : IObject
         return new string(MemoryMarshal.Cast<byte, char>(span));
     }
 
+    void IObject.GetStringData(TargetPointer address, out uint stringLength, out uint bufferOffset)
+    {
+        TargetPointer mt = GetMethodTableAddress(address);
+        if (mt == TargetPointer.Null)
+            throw new ArgumentException("Address represents a set-free object");
+        if (mt != _stringMethodTable)
+            throw new ArgumentException("Address does not represent a string object", nameof(address));
+
+        Data.String str = _target.ProcessedData.GetOrAdd<Data.String>(address);
+        stringLength = str.StringLength;
+        bufferOffset = str.BufferOffset;
+    }
+
     public TargetPointer GetArrayData(TargetPointer address, out uint count, out TargetPointer boundsStart, out TargetPointer lowerBounds)
     {
         TargetPointer mt = GetMethodTableAddress(address);

@@ -681,7 +681,30 @@ public sealed unsafe partial class DacDbiImpl : IDacDbiInterface
     }
 
     public int HasTypeParams(ulong vmTypeHandle, Interop.BOOL* pResult)
-        => _legacy is not null ? _legacy.HasTypeParams(vmTypeHandle, pResult) : HResults.E_NOTIMPL;
+    {
+        *pResult = Interop.BOOL.FALSE;
+        int hr = HResults.S_OK;
+        try
+        {
+            Contracts.IRuntimeTypeSystem rts = _target.Contracts.RuntimeTypeSystem;
+            TypeHandle typeHandle = rts.GetTypeHandle(new TargetPointer(vmTypeHandle));
+            *pResult = rts.ContainsGenericVariables(typeHandle) ? Interop.BOOL.TRUE : Interop.BOOL.FALSE;
+        }
+        catch (System.Exception ex)
+        {
+            hr = ex.HResult;
+        }
+#if DEBUG
+        if (_legacy is not null)        {
+            Interop.BOOL resultLocal;
+            int hrLocal = _legacy.HasTypeParams(vmTypeHandle, &resultLocal);
+            Debug.ValidateHResult(hr, hrLocal);
+            if (hr == HResults.S_OK)
+                Debug.Assert(*pResult == resultLocal, $"cDAC: {*pResult}, DAC: {resultLocal}");
+        }
+#endif
+        return hr;
+    }
 
     public int GetClassInfo(ulong vmAppDomain, ulong thExact, nint pData)
         => _legacy is not null ? _legacy.GetClassInfo(vmAppDomain, thExact, pData) : HResults.E_NOTIMPL;
@@ -689,8 +712,96 @@ public sealed unsafe partial class DacDbiImpl : IDacDbiInterface
     public int GetInstantiationFieldInfo(ulong vmDomainAssembly, ulong vmTypeHandle, ulong vmExactMethodTable, nint pFieldList, nuint* pObjectSize)
         => _legacy is not null ? _legacy.GetInstantiationFieldInfo(vmDomainAssembly, vmTypeHandle, vmExactMethodTable, pFieldList, pObjectSize) : HResults.E_NOTIMPL;
 
-    public int TypeHandleToExpandedTypeInfo(int boxed, ulong vmAppDomain, ulong vmTypeHandle, nint pData)
-        => _legacy is not null ? _legacy.TypeHandleToExpandedTypeInfo(boxed, vmAppDomain, vmTypeHandle, pData) : HResults.E_NOTIMPL;
+    public int TypeHandleToExpandedTypeInfo(int boxed, ulong vmAppDomain, ulong vmTypeHandle, DebuggerIPCE_ExpandedTypeData* pData)
+    {
+        AreValueTypesBoxed boxing = (AreValueTypesBoxed)boxed;
+        *pData = default;
+        int hr = HResults.S_OK;
+        try
+        {
+            IRuntimeTypeSystem rts = _target.Contracts.RuntimeTypeSystem;
+            TypeHandle typeHandle = rts.GetTypeHandle(new TargetPointer(vmTypeHandle));
+
+            CorElementType elementType = GetElementType(rts, typeHandle);
+            pData->elementType = (int)elementType;
+
+            switch (elementType)
+            {
+                case CorElementType.Array:
+                case CorElementType.SzArray:
+                {
+                    rts.IsArray(typeHandle, out uint rank);
+                    pData->ArrayTypeData_arrayRank = rank;
+                    TypeHandle elemTH = rts.GetTypeParam(typeHandle);
+                    FillBasicTypeInfo(rts, elemTH, out pData->ArrayTypeData_arrayTypeArg, vmAppDomain);
+                    break;
+                }
+
+                case CorElementType.Ptr:
+                case CorElementType.Byref:
+                    if (boxing == AreValueTypesBoxed.AllBoxed)
+                    {
+                        FillClassTypeData(rts, typeHandle, pData, vmAppDomain);
+                    }
+                    else
+                    {
+                        TypeHandle referentTH = rts.GetTypeParam(typeHandle);
+                        FillBasicTypeInfo(rts, referentTH, out pData->UnaryTypeData_unaryTypeArg, vmAppDomain);
+                    }
+                    break;
+
+                case CorElementType.ValueType:
+                    if (boxing is AreValueTypesBoxed.OnlyPrimitivesUnboxed or AreValueTypesBoxed.AllBoxed)
+                    {
+                        pData->elementType = (int)CorElementType.Class;
+                    }
+                    FillClassTypeData(rts, typeHandle, pData, vmAppDomain);
+                    break;
+
+                case CorElementType.Class:
+                    FillClassTypeData(rts, typeHandle, pData, vmAppDomain);
+                    break;
+
+                case CorElementType.FnPtr:
+                    if (boxing == AreValueTypesBoxed.AllBoxed)
+                    {
+                        FillClassTypeData(rts, typeHandle, pData, vmAppDomain);
+                    }
+                    else
+                    {
+                        pData->NaryTypeData_typeHandle = typeHandle.Address.Value;
+                    }
+                    break;
+
+                default:
+                    if (boxing == AreValueTypesBoxed.AllBoxed)
+                    {
+                        pData->elementType = (int)CorElementType.Class;
+                        FillClassTypeData(rts, typeHandle, pData, vmAppDomain);
+                    }
+                    break;
+            }
+        }
+        catch (System.Exception ex)
+        {
+            hr = ex.HResult;
+        }
+#if DEBUG
+        if (_legacy is not null)
+        {
+            DebuggerIPCE_ExpandedTypeData dataLocal;
+            int hrLocal = _legacy.TypeHandleToExpandedTypeInfo(boxed, vmAppDomain, vmTypeHandle, &dataLocal);
+            Debug.ValidateHResult(hr, hrLocal);
+            if (hr == HResults.S_OK)
+            {
+                ReadOnlySpan<byte> cdacBytes = new(pData, sizeof(DebuggerIPCE_ExpandedTypeData));
+                ReadOnlySpan<byte> dacBytes = new(&dataLocal, sizeof(DebuggerIPCE_ExpandedTypeData));
+                Debug.Assert(cdacBytes.SequenceEqual(dacBytes), $"TypeHandleToExpandedTypeInfo mismatch for typeHandle {vmTypeHandle:x}");
+            }
+        }
+#endif
+        return hr;
+    }
 
     public int GetObjectExpandedTypeInfo(int boxed, ulong vmAppDomain, ulong addr, nint pTypeInfo)
         => _legacy is not null ? _legacy.GetObjectExpandedTypeInfo(boxed, vmAppDomain, addr, pTypeInfo) : HResults.E_NOTIMPL;
@@ -699,7 +810,43 @@ public sealed unsafe partial class DacDbiImpl : IDacDbiInterface
         => _legacy is not null ? _legacy.GetObjectExpandedTypeInfoFromID(boxed, vmAppDomain, id, pTypeInfo) : HResults.E_NOTIMPL;
 
     public int GetTypeHandle(ulong vmModule, uint metadataToken, ulong* pRetVal)
-        => _legacy is not null ? _legacy.GetTypeHandle(vmModule, metadataToken, pRetVal) : HResults.E_NOTIMPL;
+    {
+        *pRetVal = 0;
+        int hr = HResults.S_OK;
+        try
+        {
+            Contracts.ILoader loader = _target.Contracts.Loader;
+            TargetPointer module = new TargetPointer(vmModule);
+            Contracts.ModuleHandle moduleHandle = loader.GetModuleHandleFromModulePtr(module);
+            Contracts.ModuleLookupTables lookupTables = loader.GetLookupTables(moduleHandle);
+            switch ((EcmaMetadataUtils.TokenType)(metadataToken & EcmaMetadataUtils.TokenTypeMask))
+            {
+                case EcmaMetadataUtils.TokenType.mdtTypeDef:
+                    *pRetVal = loader.GetModuleLookupMapElement(lookupTables.TypeDefToMethodTable, metadataToken, out var _).Value;
+                    break;
+                case EcmaMetadataUtils.TokenType.mdtTypeRef:
+                    *pRetVal = loader.GetModuleLookupMapElement(lookupTables.TypeRefToMethodTable, metadataToken, out var _).Value;
+                    break;
+                default:
+                    throw new ArgumentException("Unsupported metadata token type");
+            }
+        }
+        catch (System.Exception ex)
+        {
+            hr = ex.HResult;
+        }
+#if DEBUG
+        if (_legacy is not null)
+        {
+            ulong retValLocal;
+            int hrLocal = _legacy.GetTypeHandle(vmModule, metadataToken, &retValLocal);
+            Debug.ValidateHResult(hr, hrLocal);
+            if (hr == HResults.S_OK)
+                Debug.Assert(*pRetVal == retValLocal, $"cDAC: {*pRetVal}, DAC: {retValLocal}");
+        }
+#endif
+        return hr;
+    }
 
     public int GetApproxTypeHandle(nint pTypeData, ulong* pRetVal)
         => _legacy is not null ? _legacy.GetApproxTypeHandle(pTypeData, pRetVal) : HResults.E_NOTIMPL;
@@ -711,7 +858,37 @@ public sealed unsafe partial class DacDbiImpl : IDacDbiInterface
         => _legacy is not null ? _legacy.GetMethodDescParams(vmAppDomain, vmMethodDesc, genericsToken, pcGenericClassTypeParams, pGenericTypeParams) : HResults.E_NOTIMPL;
 
     public int GetThreadStaticAddress(ulong vmField, ulong vmRuntimeThread, ulong* pRetVal)
-        => _legacy is not null ? _legacy.GetThreadStaticAddress(vmField, vmRuntimeThread, pRetVal) : HResults.E_NOTIMPL;
+    {
+        *pRetVal = 0;
+        int hr = HResults.S_OK;
+        try
+        {
+            Contracts.IRuntimeTypeSystem rts = _target.Contracts.RuntimeTypeSystem;
+            TargetPointer fd = new TargetPointer(vmField);
+            if (vmRuntimeThread == 0)
+                throw new ArgumentException("vmRuntimeThread cannot be null for thread static fields");
+            if (!rts.IsFieldDescThreadStatic(fd))
+            {
+                throw new ArgumentException($"Field 0x{vmField:x} is not a thread static field");
+            }
+            *pRetVal = rts.GetFieldDescThreadStaticAddress(fd, new TargetPointer(vmRuntimeThread)).Value;
+        }
+        catch (System.Exception ex)
+        {
+            hr = ex.HResult;
+        }
+#if DEBUG
+        if (_legacy is not null)
+        {
+            ulong retValLocal;
+            int hrLocal = _legacy.GetThreadStaticAddress(vmField, vmRuntimeThread, &retValLocal);
+            Debug.ValidateHResult(hr, hrLocal);
+            if (hr == HResults.S_OK)
+                Debug.Assert(*pRetVal == retValLocal, $"cDAC: {*pRetVal}, DAC: {retValLocal}");
+        }
+#endif
+        return hr;
+    }
 
     public int GetCollectibleTypeStaticAddress(ulong vmField, ulong vmAppDomain, ulong* pRetVal)
         => _legacy is not null ? _legacy.GetCollectibleTypeStaticAddress(vmField, vmAppDomain, pRetVal) : HResults.E_NOTIMPL;
@@ -749,11 +926,109 @@ public sealed unsafe partial class DacDbiImpl : IDacDbiInterface
     public int GetTypedByRefInfo(ulong pTypedByRef, ulong vmAppDomain, nint pObjectData)
         => _legacy is not null ? _legacy.GetTypedByRefInfo(pTypedByRef, vmAppDomain, pObjectData) : HResults.E_NOTIMPL;
 
-    public int GetStringData(ulong objectAddress, nint pObjectData)
-        => _legacy is not null ? _legacy.GetStringData(objectAddress, pObjectData) : HResults.E_NOTIMPL;
+    public int GetStringData(ulong objectAddress, DebuggerIPCE_ObjectData* pObjectData)
+    {
+        int hr = HResults.S_OK;
+        try
+        {
+            IObject obj = _target.Contracts.Object;
+            IRuntimeTypeSystem rts = _target.Contracts.RuntimeTypeSystem;
 
-    public int GetArrayData(ulong objectAddress, nint pObjectData)
-        => _legacy is not null ? _legacy.GetArrayData(objectAddress, pObjectData) : HResults.E_NOTIMPL;
+            TargetPointer address = new TargetPointer(objectAddress);
+            TargetPointer mt = obj.GetMethodTableAddress(address);
+            TypeHandle typeHandle = rts.GetTypeHandle(mt);
+
+            if (!rts.IsString(typeHandle))
+                throw Marshal.GetExceptionForHR(CorDbgHResults.CORDBG_E_TARGET_INCONSISTENT)!;
+
+            obj.GetStringData(address, out uint stringLength, out uint bufferOffset);
+            pObjectData->stringInfo_length = stringLength;
+            pObjectData->stringInfo_offsetToStringBase = bufferOffset;
+        }
+        catch (System.Exception ex)
+        {
+            hr = ex.HResult;
+        }
+#if DEBUG
+        if (_legacy is not null)
+        {
+            DebuggerIPCE_ObjectData dataLocal = default;
+            int hrLocal = _legacy.GetStringData(objectAddress, &dataLocal);
+            Debug.ValidateHResult(hr, hrLocal);
+            if (hr == HResults.S_OK)
+            {
+                Debug.Assert(pObjectData->stringInfo_length == dataLocal.stringInfo_length, $"stringInfo.length: cDAC: {pObjectData->stringInfo_length}, DAC: {dataLocal.stringInfo_length}");
+                Debug.Assert(pObjectData->stringInfo_offsetToStringBase == dataLocal.stringInfo_offsetToStringBase, $"stringInfo.offsetToStringBase: cDAC: {pObjectData->stringInfo_offsetToStringBase}, DAC: {dataLocal.stringInfo_offsetToStringBase}");
+            }
+        }
+#endif
+        return hr;
+    }
+
+    public int GetArrayData(ulong objectAddress, DebuggerIPCE_ObjectData* pObjectData)
+    {
+        int hr = HResults.S_OK;
+        try
+        {
+            IObject obj = _target.Contracts.Object;
+            IRuntimeTypeSystem rts = _target.Contracts.RuntimeTypeSystem;
+
+            TargetPointer address = new TargetPointer(objectAddress);
+            TargetPointer mt = obj.GetMethodTableAddress(address);
+            TypeHandle typeHandle = rts.GetTypeHandle(mt);
+
+            if (!rts.IsArray(typeHandle, out uint rank))
+            {
+                pObjectData->objRefBad = 1;
+            }
+            else
+            {
+                TargetPointer dataPointer = obj.GetArrayData(address, out uint count, out TargetPointer boundsStart, out TargetPointer lowerBounds);
+
+                pObjectData->arrayInfo_rank = rank;
+                pObjectData->arrayInfo_componentCount = count;
+                pObjectData->arrayInfo_offsetToArrayBase = dataPointer.Value - address.Value;
+                pObjectData->arrayInfo_elementSize = rts.GetComponentSize(typeHandle);
+
+                if (rts.IsMultiDimArray(typeHandle))
+                {
+                    pObjectData->arrayInfo_offsetToUpperBounds = boundsStart.Value - address.Value;
+                    pObjectData->arrayInfo_offsetToLowerBounds = lowerBounds.Value - address.Value;
+                }
+                else
+                {
+                    pObjectData->arrayInfo_offsetToUpperBounds = 0;
+                    pObjectData->arrayInfo_offsetToLowerBounds = 0;
+                }
+            }
+        }
+        catch (System.Exception ex)
+        {
+            hr = ex.HResult;
+        }
+#if DEBUG
+        if (_legacy is not null)
+        {
+            DebuggerIPCE_ObjectData dataLocal = default;
+            int hrLocal = _legacy.GetArrayData(objectAddress, &dataLocal);
+            Debug.ValidateHResult(hr, hrLocal);
+            if (hr == HResults.S_OK)
+            {
+                Debug.Assert(pObjectData->objRefBad == dataLocal.objRefBad, $"objRefBad: cDAC: {pObjectData->objRefBad}, DAC: {dataLocal.objRefBad}");
+                if (pObjectData->objRefBad == 0)
+                {
+                    Debug.Assert(pObjectData->arrayInfo_rank == dataLocal.arrayInfo_rank, $"rank: cDAC: {pObjectData->arrayInfo_rank}, DAC: {dataLocal.arrayInfo_rank}");
+                    Debug.Assert(pObjectData->arrayInfo_componentCount == dataLocal.arrayInfo_componentCount, $"componentCount: cDAC: {pObjectData->arrayInfo_componentCount}, DAC: {dataLocal.arrayInfo_componentCount}");
+                    Debug.Assert(pObjectData->arrayInfo_offsetToArrayBase == dataLocal.arrayInfo_offsetToArrayBase, $"offsetToArrayBase: cDAC: {pObjectData->arrayInfo_offsetToArrayBase}, DAC: {dataLocal.arrayInfo_offsetToArrayBase}");
+                    Debug.Assert(pObjectData->arrayInfo_offsetToUpperBounds == dataLocal.arrayInfo_offsetToUpperBounds, $"offsetToUpperBounds: cDAC: {pObjectData->arrayInfo_offsetToUpperBounds}, DAC: {dataLocal.arrayInfo_offsetToUpperBounds}");
+                    Debug.Assert(pObjectData->arrayInfo_offsetToLowerBounds == dataLocal.arrayInfo_offsetToLowerBounds, $"offsetToLowerBounds: cDAC: {pObjectData->arrayInfo_offsetToLowerBounds}, DAC: {dataLocal.arrayInfo_offsetToLowerBounds}");
+                    Debug.Assert(pObjectData->arrayInfo_elementSize == dataLocal.arrayInfo_elementSize, $"elementSize: cDAC: {pObjectData->arrayInfo_elementSize}, DAC: {dataLocal.arrayInfo_elementSize}");
+                }
+            }
+        }
+#endif
+        return hr;
+    }
 
     public int GetBasicObjectInfo(ulong objectAddress, int type, ulong vmAppDomain, nint pObjectData)
         => _legacy is not null ? _legacy.GetBasicObjectInfo(objectAddress, type, vmAppDomain, pObjectData) : HResults.E_NOTIMPL;
@@ -1271,4 +1546,96 @@ public sealed unsafe partial class DacDbiImpl : IDacDbiInterface
 
     public int GetGenericArgTokenIndex(ulong vmMethod, uint* pIndex)
         => _legacy is not null ? _legacy.GetGenericArgTokenIndex(vmMethod, pIndex) : HResults.E_NOTIMPL;
+
+    // Mirrors native DacDbiInterfaceImpl::GetElementType.
+    // GetSignatureCorElementType returns Class for Object and String; this restores the distinction.
+    private CorElementType GetElementType(IRuntimeTypeSystem rts, TypeHandle typeHandle)
+    {
+        if (typeHandle.IsNull)
+            return CorElementType.Void;
+
+        if (rts.IsString(typeHandle))
+            return CorElementType.String;
+
+        CorElementType sigType = rts.GetSignatureCorElementType(typeHandle);
+        if (sigType == CorElementType.Class && rts.IsObject(typeHandle))
+        {
+            return CorElementType.Object;
+        }
+
+        return sigType;
+    }
+
+    // Mirrors native DacDbiInterfaceImpl::GetClassTypeInfo — fills ClassTypeData union member.
+    private void FillClassTypeData(IRuntimeTypeSystem rts, TypeHandle typeHandle, DebuggerIPCE_ExpandedTypeData* pTypeInfo, ulong vmAppDomain)
+    {
+        // UpCastTypeIfNeeded: replace continuation sub-types with the parent continuation MT.
+        if (rts.IsContinuation(typeHandle))
+        {
+            TargetPointer continuationMT = _target.ReadPointer(
+                _target.ReadGlobalPointer(Constants.Globals.ContinuationMethodTable));
+            typeHandle = rts.GetTypeHandle(continuationMT);
+        }
+
+        TargetPointer modulePtr = rts.GetModule(typeHandle);
+        ILoader loader = _target.Contracts.Loader;
+        Contracts.ModuleHandle moduleHandle = loader.GetModuleHandleFromModulePtr(modulePtr);
+
+        ReadOnlySpan<TypeHandle> instantiation = rts.GetInstantiation(typeHandle);
+        pTypeInfo->ClassTypeData_typeHandle = instantiation.Length > 0 ? typeHandle.Address.Value : 0;
+        pTypeInfo->ClassTypeData_metadataToken = rts.GetTypeDefToken(typeHandle);
+        pTypeInfo->ClassTypeData_vmModule = modulePtr.Value;
+        pTypeInfo->ClassTypeData_vmDomainAssembly = vmAppDomain != 0
+            ? loader.GetDomainAssembly(moduleHandle).Value
+            : 0;
+    }
+
+    // Mirrors native DacDbiInterfaceImpl::TypeHandleToBasicTypeInfo — fills a BasicTypeData
+    // for array element types, ptr/byref referent types, etc.
+    private void FillBasicTypeInfo(IRuntimeTypeSystem rts, TypeHandle typeHandle, out DebuggerIPCE_BasicTypeData info, ulong vmAppDomain)
+    {
+        info = default;
+        CorElementType elementType = GetElementType(rts, typeHandle);
+        info.elementType = (int)elementType;
+
+        switch (elementType)
+        {
+            case CorElementType.Array:
+            case CorElementType.SzArray:
+            case CorElementType.FnPtr:
+            case CorElementType.Ptr:
+            case CorElementType.Byref:
+                info.vmTypeHandle = typeHandle.Address.Value;
+                break;
+
+            case CorElementType.Class:
+            case CorElementType.ValueType:
+            {
+                if (rts.IsContinuation(typeHandle))
+                {
+                    TargetPointer continuationMT = _target.ReadPointer(
+                        _target.ReadGlobalPointer(Constants.Globals.ContinuationMethodTable));
+                    typeHandle = rts.GetTypeHandle(continuationMT);
+                }
+
+                TargetPointer modulePtr = rts.GetModule(typeHandle);
+                ILoader loader = _target.Contracts.Loader;
+                Contracts.ModuleHandle moduleHandle = loader.GetModuleHandleFromModulePtr(modulePtr);
+
+                ReadOnlySpan<TypeHandle> instantiation = rts.GetInstantiation(typeHandle);
+                info.vmTypeHandle = instantiation.Length > 0 ? typeHandle.Address.Value : 0;
+                info.metadataToken = rts.GetTypeDefToken(typeHandle);
+                info.vmModule = modulePtr.Value;
+                info.vmDomainAssembly = vmAppDomain != 0
+                    ? loader.GetDomainAssembly(moduleHandle).Value
+                    : 0;
+                break;
+            }
+
+            default:
+                break;
+        }
+    }
+
+
 }

@@ -59,6 +59,7 @@ TargetPointer GetRootAssembly();
 string GetAppDomainFriendlyName();
 TargetPointer GetModule(ModuleHandle handle);
 TargetPointer GetAssembly(ModuleHandle handle);
+TargetPointer GetDomainAssembly(ModuleHandle handle);
 TargetPointer GetPEAssembly(ModuleHandle handle);
 bool TryGetLoadedImageContents(ModuleHandle handle, out TargetPointer baseAddress, out uint size, out uint imageFlags);
 TargetPointer GetILAddr(TargetPointer peAssemblyPtr, int rva);
@@ -98,6 +99,7 @@ IReadOnlyDictionary<string, TargetPointer> GetLoaderAllocatorHeaps(TargetPointer
 | Data Descriptor Name | Field | Meaning |
 | --- | --- | --- |
 | `Module` | `Assembly` | Assembly of the Module |
+| `Module` | `DomainAssembly` | DomainAssembly of the Module |
 | `Module` | `PEAssembly` | PEAssembly of the Module |
 | `Module` | `Base` | Pointer to start of PE file in memory |
 | `Module` | `Flags` | Assembly of the Module |
@@ -362,6 +364,11 @@ TargetPointer ILoader.GetModule(ModuleHandle handle)
 TargetPointer GetAssembly(ModuleHandle handle)
 {
     return target.ReadPointer(handle.Address + /* Module::Assembly offset */);
+}
+
+TargetPointer GetDomainAssembly(ModuleHandle handle)
+{
+    return target.ReadPointer(handle.Address + /* Module::DomainAssembly offset */);
 }
 
 TargetPointer GetPEAssembly(ModuleHandle handle)
