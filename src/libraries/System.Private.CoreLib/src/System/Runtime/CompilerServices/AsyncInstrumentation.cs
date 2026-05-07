@@ -97,7 +97,7 @@ namespace System.Runtime.CompilerServices
             }
         }
 
-        private static Flags s_activeFlags = Flags.Synchronize;
+        private static Flags s_activeFlags = Flags.Synchronize; // Debugger/profiler depends on the name of this field
 
         private static Flags s_asyncProfilerActiveFlags;
 
